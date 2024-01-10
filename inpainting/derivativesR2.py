@@ -58,14 +58,18 @@ def laplacian(
     I_dplus = I_dx + I_dy  # Positive diagonal
     I_dminus = I_dx - I_dy # Negative diagonal
     for I in ti.grouped(u):
-        # Axial Stencil
-        # 0 |  1 | 0
-        # 1 | -4 | 1
-        # 0 |  1 | 0
         I_dx_forward = sanitize_index(I + I_dx, u)
         I_dx_backward = sanitize_index(I - I_dx, u)
         I_dy_forward = sanitize_index(I + I_dy, u)
         I_dy_backward = sanitize_index(I - I_dy, u)
+        I_dplus_forward = sanitize_index(I + I_dplus, u)
+        I_dplus_backward = sanitize_index(I - I_dplus, u)
+        I_dminus_forward = sanitize_index(I + I_dminus, u)
+        I_dminus_backward = sanitize_index(I - I_dminus, u)
+        # Axial Stencil
+        # 0 |  1 | 0
+        # 1 | -4 | 1
+        # 0 |  1 | 0
         laplacian_u[I] = (1 - δ) / dxy**2 * (
             -4 * u[I] +
             u[I_dx_forward] +
@@ -77,10 +81,6 @@ def laplacian(
         # 1 |  0 | 1
         # 0 | -4 | 0
         # 1 |  0 | 1
-        I_dplus_forward = sanitize_index(I + I_dplus, u)
-        I_dplus_backward = sanitize_index(I - I_dplus, u)
-        I_dminus_forward = sanitize_index(I + I_dminus, u)
-        I_dminus_backward = sanitize_index(I - I_dminus, u)
         laplacian_u[I] += δ / (2 * dxy**2) * (
             -4 * u[I] +
             u[I_dplus_forward] +
