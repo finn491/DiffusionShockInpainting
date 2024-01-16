@@ -269,6 +269,22 @@ def convolve_with_kernel_x_dir(
     radius: ti.i32,
     u_convolved: ti.template()
 ):
+    """
+    @taichi.func
+    
+    Convolve `u_padded` the 1D kernel `k` in the x-direction.
+
+    Args:
+      Static:
+        `u_padded`: ti.field(dtype=ti.f32, shape=shape_padded) of array to be
+          convolved, with shape_padded[i] = shape[i] + 2 * `radius`.
+        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel.
+        `radius`: radius at which kernel `k` is truncated, taking integer values
+          greater than 0.
+      Mutated:
+        `u_convolved`: ti.field(dtype=ti.f32, shape=shape) of convolution of 
+          `u_padded` with `k`.
+    """
     for x, y in u_convolved:
         y_shifted = y + radius
         s = 0.
@@ -283,6 +299,22 @@ def convolve_with_kernel_y_dir(
     radius: ti.i32,
     u_convolved: ti.template()
 ):
+    """
+    @taichi.func
+    
+    Convolve `u_padded` the 1D kernel `k` in the y-direction.
+
+    Args:
+      Static:
+        `u_padded`: ti.field(dtype=ti.f32, shape=shape_padded) of array to be
+          convolved, with shape_padded[i] = shape[i] + 2 * `radius`.
+        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel.
+        `radius`: radius at which kernel `k` is truncated, taking integer values
+          greater than 0.
+      Mutated:
+        `u_convolved`: ti.field(dtype=ti.f32, shape=shape) of convolution of 
+          `u_padded` with `k`.
+    """
     for x, y in u_convolved:
         x_shifted = x + radius
         s = 0.
@@ -298,6 +330,8 @@ def gaussian_derivative_kernel(
     k: ti.template()
 ):
     """
+    @taichi.func
+    
     Compute kernel for 1D Gaussian derivative of order `order` at scale `σ`.
 
     Based on the DIPlib algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
@@ -309,7 +343,8 @@ def gaussian_derivative_kernel(
         `radius`: radius at which kernel is truncated, taking integer values
           greater than 0.
       Mutated:
-        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel.
+        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel, which is
+          updated in place.
     """
     if order == 0:
         ti.loop_config(serialize=True)
