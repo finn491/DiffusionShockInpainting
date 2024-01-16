@@ -164,6 +164,38 @@ def dilation(
         dilation_u[I] += δ * ti.math.sqrt(abs_dplus[I]**2 + abs_dminus[I]**2)
 
 @ti.func
+def central_derivatives_second_order(
+    u: ti.template(),
+    dxy: ti.f32,
+    d_dxx: ti.template(),
+    d_dxy: ti.template(),
+    d_dyy: ti.template()
+):
+    I_dx = ti.Vector([1, 0], dt=ti.i32)
+    I_dy = ti.Vector([0, 1], dt=ti.i32)
+    I_dplus = I_dx + I_dy  # Positive diagonal
+    I_dminus = I_dx - I_dy # Negative diagonal
+    for I in ti.grouped(u):
+        d_dxx[I] = (
+            u[I + I_dx] -
+            2 * u[I] +
+            u[I - I_dx]
+        ) / dxy**2
+
+        d_dxy[I] = (
+            u[I + I_dplus] -
+            u[I + I_dminus] -
+            u[I - I_dminus] +
+            u[I - I_dplus]
+        ) / (4* dxy**2)
+
+        d_dyy[I] = (
+            u[I + I_dy] -
+            2 * u[I] +
+            u[I - I_dy]
+        ) / dxy**2
+
+@ti.func
 def abs_derivatives(
     u: ti.template(),
     dxy: ti.f32,
@@ -259,6 +291,8 @@ def derivatives(
         dplus_backward[I] = (u[I] - u[I_dplus_backward]) / (ti.math.sqrt(2) * dxy)
         dminus_forward[I] = (u[I_dminus_forward] - u[I]) / (ti.math.sqrt(2) * dxy)
         dminus_backward[I] = (u[I] - u[I_dminus_backward]) / (ti.math.sqrt(2) * dxy)
+
+# Gaussian derivatives
 
 # We cannot nest parallelised loops in if-else statements in TaiChi kernels.
 
