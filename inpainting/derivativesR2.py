@@ -176,23 +176,32 @@ def central_derivatives_second_order(
     I_dplus = I_dx + I_dy  # Positive diagonal
     I_dminus = I_dx - I_dy # Negative diagonal
     for I in ti.grouped(u):
+        I_dx_forward = sanitize_index(I + I_dx, u)
+        I_dx_backward = sanitize_index(I - I_dx, u)
+        I_dy_forward = sanitize_index(I + I_dy, u)
+        I_dy_backward = sanitize_index(I - I_dy, u)
+        I_dplus_forward = sanitize_index(I + I_dplus, u)
+        I_dplus_backward = sanitize_index(I - I_dplus, u)
+        I_dminus_forward = sanitize_index(I + I_dminus, u)
+        I_dminus_backward = sanitize_index(I - I_dminus, u)
+
         d_dxx[I] = (
-            u[I + I_dx] -
+            u[I_dx_forward] -
             2 * u[I] +
-            u[I - I_dx]
+            u[I_dx_backward]
         ) / dxy**2
 
         d_dxy[I] = (
-            u[I + I_dplus] -
-            u[I + I_dminus] -
-            u[I - I_dminus] +
-            u[I - I_dplus]
+            u[I_dplus_forward] -
+            u[I_dminus_forward] -
+            u[I_dminus_backward] +
+            u[I_dplus_backward]
         ) / (4* dxy**2)
 
         d_dyy[I] = (
-            u[I + I_dy] -
+            u[I_dy_forward] -
             2 * u[I] +
-            u[I - I_dy]
+            u[I_dy_backward]
         ) / dxy**2
 
 @ti.func
