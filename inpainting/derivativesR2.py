@@ -28,6 +28,37 @@ def sanitize_index(
         ti.math.clamp(index[1], 0, shape[1] - 1),
     ], dt=ti.i32)
 
+@ti.func
+def normalise_field(
+    field: ti.template(),
+    norm: ti.f32
+):
+    """
+    @ti.func
+
+    Normalise `field` to sum to `norm`.
+
+    Args:
+      Static:
+        `norm`: desired norm for `field`, taking values greater than 0.
+      Mutated:
+        `field`: ti.field that is to be normalised, which is updated in place.    
+    """
+    current_norm = 0.
+    for I in ti.grouped(field):
+        current_norm += field[I]
+    norm_factor = norm / current_norm
+    for I in ti.grouped(field):
+        field[I] *= norm_factor
+
+@ti.func
+def divide_field(
+    field: ti.template(),
+    denom: ti.f32
+):
+    for I in ti.grouped(field):
+        field[I] /= denom
+
 # Actual Derivatives
 
 @ti.func
@@ -228,3 +259,72 @@ def derivatives(
         dplus_backward[I] = (u[I] - u[I_dplus_backward]) / (ti.math.sqrt(2) * dxy)
         dminus_forward[I] = (u[I_dminus_forward] - u[I]) / (ti.math.sqrt(2) * dxy)
         dminus_backward[I] = (u[I] - u[I_dminus_backward]) / (ti.math.sqrt(2) * dxy)
+
+# We cannot nest parallelised loops in if-else statements in TaiChi kernels.
+
+@ti.func
+def convolve_with_kernel_x_dir(
+    u_padded: ti.template(),
+    k: ti.template(),
+    radius: ti.i32,
+    u_convolved: ti.template()
+):
+    for x, y in u_convolved:
+        y_shifted = y + radius
+        s = 0.
+        for i in range(2*radius+1):
+            s+= u_padded[x + i, y_shifted] * k[2*radius+1-i]
+        u_convolved[x, y] = s
+
+@ti.func
+def convolve_with_kernel_y_dir(
+    u_padded: ti.template(),
+    k: ti.template(),
+    radius: ti.i32,
+    u_convolved: ti.template()
+):
+    for x, y in u_convolved:
+        x_shifted = x + radius
+        s = 0.
+        for i in range(2*radius+1):
+            s+= u_padded[x_shifted, y + i] * k[2*radius+1-i]
+        u_convolved[x, y] = s
+
+@ti.func
+def gaussian_derivative_kernel(
+    σ: ti.f32,
+    order: ti.i32,
+    radius: ti.i32,
+    k: ti.template()
+):
+    """
+    Compute kernel for 1D Gaussian derivative of order `order` at scale `σ`.
+
+    Based on the DIPlib algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
+
+    Args:
+      Static:
+        `σ`: scale of Gaussian, taking values greater than 0.
+        `order`: order of the derivative, taking values 0 or 1.
+        `radius`: radius at which kernel is truncated, taking integer values
+          greater than 0.
+      Mutated:
+        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel.
+    """
+    if order == 0:
+        ti.loop_config(serialize=True)
+        for i in range(2*radius+1):
+            x = -radius + i
+            val = ti.math.exp(-x**2 / (2 * σ**2))
+            k[i] = val
+        normalise_field(k, 1.)
+
+    elif order == 1:
+        moment = 0.
+        ti.loop_config(serialize=True)
+        for i in range(2*radius+1):
+            x = -radius + i
+            val = x * ti.math.exp(-x**2 / (2 * σ**2))
+            moment += x * val
+            k[i] = val
+        divide_field(k, -moment)
