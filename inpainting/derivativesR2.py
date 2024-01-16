@@ -370,6 +370,7 @@ def gaussian_derivative_kernel(
     σ: ti.f32,
     order: ti.i32,
     radius: ti.i32,
+    dxy: ti.f32,
     k: ti.template()
 ):
     """
@@ -385,6 +386,7 @@ def gaussian_derivative_kernel(
         `order`: order of the derivative, taking values 0 or 1.
         `radius`: radius at which kernel is truncated, taking integer values
           greater than 0.
+        `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
         `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel, which is
           updated in place.
@@ -395,7 +397,7 @@ def gaussian_derivative_kernel(
             x = -radius + i
             val = ti.math.exp(-x**2 / (2 * σ**2))
             k[i] = val
-        normalise_field(k, 1.)
+        normalise_field(k, 1/dxy)
 
     elif order == 1:
         moment = 0.
@@ -405,4 +407,4 @@ def gaussian_derivative_kernel(
             val = x * ti.math.exp(-x**2 / (2 * σ**2))
             moment += x * val
             k[i] = val
-        divide_field(k, -moment)
+        divide_field(k, -moment * dxy)

@@ -158,6 +158,7 @@ def morphological_switch(
     u_padded: ti.template(),
     k: ti.template(),
     radius: ti.i32,
+    dxy: ti.f32,
     d_dx: ti.template(),
     d_dy: ti.template(),
     c: ti.template(),
@@ -176,26 +177,37 @@ def morphological_switch(
 
     Args:
       Static:
-        `u_padded`: ti.field(dtype=ti.f32, shape=shape_padded) of array to be
-          convolved, with shape_padded[i] = shape[i] + 2 * `radius`.
+        `u_padded`: ti.field(dtype=ti.f32, shape=shape_padded) of padded current
+          state, with shape_padded[i] = shape[i] + 2 * `radius`.
         `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of first order Gaussian
           derivative kernel.
         `radius`: radius at which kernel `k` is truncated, taking integer values
           greater than 0.
-        `λ`: contrast parameter, taking values greater than 0.
+        `dxy`: step size in x and y direction, taking values greater than 0.
+        `u`: ti.field(dtype=ti.f32, shape=shape) of current state.
       Mutated:
-        `d_d*`: ti.field(dtype=ti.f32) of Gaussian derivatives, which are 
-          updated in place.
+        `d_d*`: ti.field(dtype=ti.f32) of first order Gaussian derivatives,
+          which are updated in place.
+        `d_d**`: ti.field(dtype=ti.f32) of second order Gaussian derivatives,
+          which are updated in place.
         `switch`: ti.field(dtype=ti.f32, shape=shape) of values that determine
-          the degree of diffusion or shock, taking values between 0 and 1.
+          the degree of dilation or erosion, taking values between -1 and 1.
     """
     find_dominant_eigenvector(u_padded, k, radius, d_dx, d_dy, c, s)
-    inpainting.derivativesR2.central_derivatives_second_order(u, 1., d_dxx, d_dxy, d_dyy)
+    inpainting.derivativesR2.central_derivatives_second_order(u, dxy, d_dxx, d_dxy, d_dyy)
     for I in ti.grouped(switch):
         switch[I] = ti.math.sign(c[I]**2 * d_dxx[I] + 2 * c[I] * s[I] * d_dxy[I] + s[I]**2 * d_dyy[I])
 
 
 # !!!NO EXTERNAL REGULARISATION!!!
+# Using that grad u is the dominant eigenvector of grad u grad u^T. We would 
+# like to work with a regularised version of the structure tensor, namely
+# Jρ := Gρ * (grad uσ grad uσ^T). However, then grad uσ is no longer the 
+# dominant eigenvector, so we have to do actual work. We could use the matrix
+# power method: take some random u0, and compute Jρ^n u0 for some large n. As 
+# long as u0 is not fully in the span of the small eigenvector, the resulting
+# vector will almost be in the span of the dominant eigenvector.
+
 @ti.func
 def find_dominant_eigenvector(
     u_padded: ti.template(),
