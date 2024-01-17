@@ -5,3 +5,4 @@ import inpainting.switches as switches
 import inpainting.dsfilter as dsfilter
 
 # Most important functions are available at top level
+from inpainting.dsfilter import DS_filter_R2

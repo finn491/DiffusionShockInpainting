@@ -365,7 +365,7 @@ def convolve_with_kernel_y_dir(
             s+= u_padded[y + i, x_shifted] * k[2*radius+1-i]
         u_convolved[y, x] = s
 
-def gaussian_derivative_kernel(σ, order, radius, dxy=1.):
+def gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):
     """Compute kernel for 1D Gaussian derivative of order `order` at scale `σ`.
 
     Based on the DIPlib algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
@@ -373,10 +373,15 @@ def gaussian_derivative_kernel(σ, order, radius, dxy=1.):
     Args:
         `σ`: scale of Gaussian, taking values greater than 0.
         `order`: order of the derivative, taking values 0 or 1.
-        `radius`: radius at which kernel is truncated, taking integer values
-          greater than 0.
+        `truncate`: number of scales `σ` at which kernel is truncated, taking 
+          values greater than 0.
         `dxy`: step size in x and y direction, taking values greater than 0.
+
+    Returns:
+        Tuple ti.field(dtype=ti.f32, shape=2*radius+1) of the Gaussian kernel
+          and the radius of the kernel.
     """
+    radius = int(σ * truncate + 0.5)
     k = ti.field(dtype=ti.f32, shape=2*radius+1)
     match order:
         case 0:
@@ -384,8 +389,8 @@ def gaussian_derivative_kernel(σ, order, radius, dxy=1.):
         case 1:
             gaussian_derivative_kernel_order_1(σ, radius, dxy, k)
         case _:
-            raise(NotImplementedError(f"Order {order} has not been implemented yet."))
-    return k
+            raise(NotImplementedError(f"Order {order} has not been implemented yet; choose order 0 or 1."))
+    return k, radius
 
 @ti.kernel
 def gaussian_derivative_kernel_order_0(
