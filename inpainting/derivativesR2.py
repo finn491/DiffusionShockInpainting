@@ -61,14 +61,14 @@ def divide_field(
 
 # Actual Derivatives
 
-@ti.func
+@ti.kernel
 def laplacian(
     u: ti.template(),
     dxy: ti.f32,
     laplacian_u: ti.template()
 ):
     """
-    @taichi.func
+    @taichi.kernel
 
     Compute an approximation of the Laplacian of `u` using axial and diagonal
     central differences, as found in "Diffusion-Shock Inpainting" (2023) by K.
@@ -120,11 +120,10 @@ def laplacian(
             u[I_dminus_backward]
         )
 
-@ti.func
+@ti.kernel
 def dilation(
     u: ti.template(),
     dxy: ti.f32,
-    dilation_u: ti.template(),
     dx_forward: ti.template(),
     dx_backward: ti.template(),
     dy_forward: ti.template(),
@@ -136,10 +135,11 @@ def dilation(
     abs_dx: ti.template(),
     abs_dy: ti.template(),
     abs_dplus: ti.template(),
-    abs_dminus: ti.template()
+    abs_dminus: ti.template(),
+    dilation_u: ti.template()
 ):
     """
-    @taichi.func
+    @taichi.kernel
 
     Compute an approximation of the |grad `u`| using axial and diagonal upwind
     differences, as found in "Diffusion-Shock Inpainting" (2023) by K.
@@ -365,7 +365,7 @@ def convolve_with_kernel_y_dir(
             s+= u_padded[x_shifted, y + i] * k[2*radius+1-i]
         u_convolved[x, y] = s
 
-@ti.func
+@ti.kernel
 def gaussian_derivative_kernel(
     σ: ti.f32,
     order: ti.i32,
@@ -374,7 +374,7 @@ def gaussian_derivative_kernel(
     k: ti.template()
 ):
     """
-    @taichi.func
+    @taichi.kernel
     
     Compute kernel for 1D Gaussian derivative of order `order` at scale `σ`.
 

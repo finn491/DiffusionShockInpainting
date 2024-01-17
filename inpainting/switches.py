@@ -7,7 +7,7 @@ import inpainting
 
 ## Switcher
 
-@ti.func
+@ti.kernel
 def DS_switch(
     u_padded: ti.template(),
     k: ti.template(),
@@ -18,7 +18,7 @@ def DS_switch(
     switch: ti.template()
 ):
     """
-    @taichi.func
+    @taichi.kernel
 
     Determine to what degree we should perform diffusion or shock, as in
     "Diffusion-Shock Inpainting" (2023) by K. Schaefer and J. Weickert.
