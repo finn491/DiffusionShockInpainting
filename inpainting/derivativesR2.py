@@ -365,10 +365,31 @@ def convolve_with_kernel_y_dir(
             s+= u_padded[x_shifted, y + i] * k[2*radius+1-i]
         u_convolved[x, y] = s
 
+def gaussian_derivative_kernel(σ, order, radius, dxy=1.):
+    """Compute kernel for 1D Gaussian derivative of order `order` at scale `σ`.
+
+    Based on the DIPlib algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
+
+    Args:
+        `σ`: scale of Gaussian, taking values greater than 0.
+        `order`: order of the derivative, taking values 0 or 1.
+        `radius`: radius at which kernel is truncated, taking integer values
+          greater than 0.
+        `dxy`: step size in x and y direction, taking values greater than 0.
+    """
+    k = ti.field(dtype=ti.f32, shape=2*radius+1)
+    match order:
+        case 0:
+            gaussian_derivative_kernel_order_0(σ, radius, dxy, k)
+        case 1:
+            gaussian_derivative_kernel_order_1(σ, radius, dxy, k)
+        case _:
+            raise(NotImplementedError(f"Order {order} has not been implemented yet."))
+    return k
+
 @ti.kernel
-def gaussian_derivative_kernel(
+def gaussian_derivative_kernel_order_0(
     σ: ti.f32,
-    order: ti.i32,
     radius: ti.i32,
     dxy: ti.f32,
     k: ti.template()
@@ -376,14 +397,13 @@ def gaussian_derivative_kernel(
     """
     @taichi.kernel
     
-    Compute kernel for 1D Gaussian derivative of order `order` at scale `σ`.
+    Compute 1D Gaussian kernel at scale `σ`.
 
     Based on the DIPlib algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
 
     Args:
       Static:
         `σ`: scale of Gaussian, taking values greater than 0.
-        `order`: order of the derivative, taking values 0 or 1.
         `radius`: radius at which kernel is truncated, taking integer values
           greater than 0.
         `dxy`: step size in x and y direction, taking values greater than 0.
@@ -391,20 +411,42 @@ def gaussian_derivative_kernel(
         `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel, which is
           updated in place.
     """
-    if order == 0:
-        ti.loop_config(serialize=True)
-        for i in range(2*radius+1):
-            x = -radius + i
-            val = ti.math.exp(-x**2 / (2 * σ**2))
-            k[i] = val
-        normalise_field(k, 1/dxy)
+    ti.loop_config(serialize=True)
+    for i in range(2*radius+1):
+        x = -radius + i
+        val = ti.math.exp(-x**2 / (2 * σ**2))
+        k[i] = val
+    normalise_field(k, 1/dxy)
 
-    elif order == 1:
-        moment = 0.
-        ti.loop_config(serialize=True)
-        for i in range(2*radius+1):
-            x = -radius + i
-            val = x * ti.math.exp(-x**2 / (2 * σ**2))
-            moment += x * val
-            k[i] = val
-        divide_field(k, -moment * dxy)
+@ti.kernel
+def gaussian_derivative_kernel_order_1(
+    σ: ti.f32,
+    radius: ti.i32,
+    dxy: ti.f32,
+    k: ti.template()
+):
+    """
+    @taichi.kernel
+    
+    Compute kernel for 1D Gaussian derivative of order 1 at scale `σ`.
+
+    Based on the DIPlib algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
+
+    Args:
+      Static:
+        `σ`: scale of Gaussian, taking values greater than 0.
+        `radius`: radius at which kernel is truncated, taking integer values
+          greater than 0.
+        `dxy`: step size in x and y direction, taking values greater than 0.
+      Mutated:
+        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel, which is
+          updated in place.
+    """
+    moment = 0.
+    ti.loop_config(serialize=True)
+    for i in range(2*radius+1):
+        x = -radius + i
+        val = x * ti.math.exp(-x**2 / (2 * σ**2))
+        moment += x * val
+        k[i] = val
+    divide_field(k, -moment * dxy)

@@ -20,8 +20,7 @@ def DS_filter_R2(u0, ν, λ, σ, T):
 
 def compute_gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):
     radius = int(σ * truncate + 0.5)
-    k = ti.field(dtype=ti.f32, shape=2*radius+1)
-    inpainting.derivativesR2.gaussian_derivative_kernel(σ, order, radius, dxy, k)
+    inpainting.derivativesR2.gaussian_derivative_kernel(σ, order, radius, dxy=dxy)
     return k, radius
 
 
