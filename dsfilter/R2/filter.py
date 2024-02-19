@@ -18,9 +18,10 @@ from dsfilter.R2.metric import (
 )
 from dsfilter.utils import unpad_array
 
-def DS_filter_R2(u0, ν, λ, σ, dxy, T):
+def DS_filter_R2(u0_np, mask_np, ν, λ, σ, dxy, T):
     # Align with (x, y)-frame
-    u0 = align_to_real_axis_scalar_field(u0)
+    u0_np = align_to_real_axis_scalar_field(u0_np)
+    mask_np = align_to_real_axis_scalar_field(mask_np)
     # shape = u0.shape
 
     # Set hyperparameters
@@ -30,21 +31,24 @@ def DS_filter_R2(u0, ν, λ, σ, dxy, T):
     k_morph, radius_morph = gaussian_derivative_kernel(σ, 1)
 
     # Initialise TaiChi objects
-    ## Padded versions of u0 to be able to do Gaussian derivative
-    u_np = np.pad(u0, pad_width=1, mode="reflect")
-    shape = u_np.shape
+    ## Padded versions of u to be able to do Gaussian derivative
+    u0_np = np.pad(u0_np, pad_width=1, mode="reflect")
+    shape = u0_np.shape
+    u0 = ti.field(dtype=ti.f32, shape=shape)
+    u0.from_numpy(u0_np)
+
+    mask_np = np.pad(mask_np, pad_width=1, constant_values=1.)
+    mask = ti.field(dtype=ti.f32, shape=shape)
+    mask.from_numpy(mask_np)
+
     u = ti.field(dtype=ti.f32, shape=shape)
-    u.from_numpy(u_np)
+    u.from_numpy(u0_np)
 
-    u_DS_np = np.pad(u0, pad_width=radius_DS, constant_values=0.)
-    shape_DS = u_DS_np.shape
-    u_DS = ti.field(dtype=ti.f32, shape=shape_DS)
-    u_DS.from_numpy(u_DS_np)
+    u_DS = ti.field(dtype=ti.f32, shape=shape)
+    u_DS.from_numpy(u0_np)
 
-    u_morph_np = np.pad(u0, pad_width=radius_morph, constant_values=0.)
-    shape_morph = u_morph_np.shape
-    u_morph = ti.field(dtype=ti.f32, shape=shape_morph)
-    u_morph.from_numpy(u_morph_np)
+    u_morph = ti.field(dtype=ti.f32, shape=shape)
+    u_morph.from_numpy(u0_np)
 
     ## Gaussian derivatives
     d_dx = ti.field(dtype=ti.f32, shape=shape)
@@ -85,6 +89,7 @@ def DS_filter_R2(u0, ν, λ, σ, dxy, T):
         dilation(u, dxy, dx_forward, dx_backward, dy_forward, dy_backward, dplus_forward, dplus_backward,
                  dminus_forward, dminus_backward, abs_dx, abs_dy, abs_dplus, abs_dminus, dilation_u) 
         step_DS_filter(u, dt, switch_DS, switch_morph, laplacian_u, dilation_u)
+        apply_mask(u, u0, mask)
         fix_reflected_padding(u)
         fix_switch_padding(u, radius_DS, u_DS)
         fix_switch_padding(u, radius_morph, u_morph)
@@ -168,3 +173,12 @@ def fix_switch_padding(
     I_shift = ti.Vector([radius - 1, radius - 1], ti.i32)
     for I in ti.grouped(u):
         switch[I + I_shift] = u[I]
+
+@ti.kernel
+def apply_mask(
+    u: ti.template(),
+    u0: ti.template(),
+    mask: ti.template()
+):
+    for I in ti.grouped(u):
+        u[I] = (1 - mask[I]) * u[I] + mask[I] * u0[I]
