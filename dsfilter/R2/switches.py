@@ -4,9 +4,9 @@ import taichi as ti
 from dsfilter.R2.derivatives import (
     convolve_with_kernel_x_dir,
     convolve_with_kernel_y_dir,
-    sanitize_index,
     central_derivatives_second_order
 )
+from dsfilter.utils import sanitize_index_R2
 
 # Diffusion-Shock
 
@@ -121,14 +121,14 @@ def sobel_gradient(
     I_dplus = I_dx + I_dy  # Positive diagonal
     I_dminus = I_dx - I_dy # Negative diagonal
     for I in ti.grouped(u):
-        I_dx_forward = sanitize_index(I + I_dx, u)
-        I_dx_backward = sanitize_index(I - I_dx, u)
-        I_dy_forward = sanitize_index(I + I_dy, u)
-        I_dy_backward = sanitize_index(I - I_dy, u)
-        I_dplus_forward = sanitize_index(I + I_dplus, u)
-        I_dplus_backward = sanitize_index(I - I_dplus, u)
-        I_dminus_forward = sanitize_index(I + I_dminus, u)
-        I_dminus_backward = sanitize_index(I - I_dminus, u)
+        I_dx_forward = sanitize_index_R2(I + I_dx, u)
+        I_dx_backward = sanitize_index_R2(I - I_dx, u)
+        I_dy_forward = sanitize_index_R2(I + I_dy, u)
+        I_dy_backward = sanitize_index_R2(I - I_dy, u)
+        I_dplus_forward = sanitize_index_R2(I + I_dplus, u)
+        I_dplus_backward = sanitize_index_R2(I - I_dplus, u)
+        I_dminus_forward = sanitize_index_R2(I + I_dminus, u)
+        I_dminus_backward = sanitize_index_R2(I - I_dminus, u)
         # du/dx Stencil
         # -1 | 0 | 1
         # -2 | 0 | 2
@@ -158,7 +158,7 @@ def sobel_gradient(
 
 ## Switcher
 
-@ti.func
+@ti.kernel
 def morphological_switch(
     u_padded: ti.template(),
     k: ti.template(),

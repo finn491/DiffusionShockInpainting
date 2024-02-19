@@ -306,17 +306,11 @@ def convolve_with_kernel_x_dir(
         `u_convolved`: ti.field(dtype=ti.f32, shape=shape) of convolution of 
           `u_padded` with `k`.
     """
-    # for y, x in u_convolved:
-    #     y_shifted = y + radius
-    #     s = 0.
-    #     for i in range(2*radius+1):
-    #         s+= u_padded[y_shifted, x + i] * k[2*radius+1-i]
-    #     u_convolved[y, x] = s
     for x, y in u_convolved:
         y_shifted = y + radius
         s = 0.
         for i in range(2*radius+1):
-            s+= u_padded[x + i, y + y_shifted] * k[2*radius+1-i]
+            s += u_padded[x + i, y_shifted] * k[2*radius+1-i]
         u_convolved[x, y] = s
 
 @ti.func
@@ -342,12 +336,6 @@ def convolve_with_kernel_y_dir(
         `u_convolved`: ti.field(dtype=ti.f32, shape=shape) of convolution of 
           `u_padded` with `k`.
     """
-    # for y, x in u_convolved:
-    #     x_shifted = x + radius
-    #     s = 0.
-    #     for i in range(2*radius+1):
-    #         s+= u_padded[y + i, x_shifted] * k[2*radius+1-i]
-    #     u_convolved[y, x] = s
     for x, y in u_convolved:
         x_shifted = x + radius
         s = 0.
