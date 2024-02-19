@@ -17,3 +17,4 @@
 import dsfilter.R2.filter
 import dsfilter.R2.derivatives
 import dsfilter.R2.switches
+import dsfilter.R2.metric

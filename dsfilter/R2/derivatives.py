@@ -1,32 +1,10 @@
 # derivativesR2.py
 
 import taichi as ti
+from dsfilter.utils import sanitize_index_R2
 
 # Helper Functions
 
-
-@ti.func
-def sanitize_index(
-    index: ti.types.vector(2, ti.i32),
-    input: ti.template()
-) -> ti.types.vector(2, ti.i32):
-    """
-    @taichi.func
-    
-    Make sure the `index` is inside the shape of `input`. Adapted from Gijs.
-
-    Args:
-        `index`: ti.types.vector(n=2, dtype=ti.i32) index.
-        `input`: ti.field in which we want to index.
-
-    Returns:
-        ti.types.vector(n=2, dtype=ti.i32) of index that is within `input`.
-    """
-    shape = ti.Vector(ti.static(input.shape), dt=ti.i32)
-    return ti.Vector([
-        ti.math.clamp(index[0], 0, shape[0] - 1),
-        ti.math.clamp(index[1], 0, shape[1] - 1),
-    ], dt=ti.i32)
 
 @ti.func
 def normalise_field(
@@ -89,14 +67,14 @@ def laplacian(
     I_dplus = I_dx + I_dy  # Positive diagonal
     I_dminus = I_dx - I_dy # Negative diagonal
     for I in ti.grouped(u):
-        I_dx_forward = sanitize_index(I + I_dx, u)
-        I_dx_backward = sanitize_index(I - I_dx, u)
-        I_dy_forward = sanitize_index(I + I_dy, u)
-        I_dy_backward = sanitize_index(I - I_dy, u)
-        I_dplus_forward = sanitize_index(I + I_dplus, u)
-        I_dplus_backward = sanitize_index(I - I_dplus, u)
-        I_dminus_forward = sanitize_index(I + I_dminus, u)
-        I_dminus_backward = sanitize_index(I - I_dminus, u)
+        I_dx_forward = sanitize_index_R2(I + I_dx, u)
+        I_dx_backward = sanitize_index_R2(I - I_dx, u)
+        I_dy_forward = sanitize_index_R2(I + I_dy, u)
+        I_dy_backward = sanitize_index_R2(I - I_dy, u)
+        I_dplus_forward = sanitize_index_R2(I + I_dplus, u)
+        I_dplus_backward = sanitize_index_R2(I - I_dplus, u)
+        I_dminus_forward = sanitize_index_R2(I + I_dminus, u)
+        I_dminus_backward = sanitize_index_R2(I - I_dminus, u)
         # Axial Stencil
         # 0 |  1 | 0
         # 1 | -4 | 1
@@ -176,18 +154,18 @@ def central_derivatives_second_order(
     I_dplus = I_dx + I_dy  # Positive diagonal
     I_dminus = I_dx - I_dy # Negative diagonal
     for I in ti.grouped(u):
-        I_dx_forward = sanitize_index(I + I_dx, u)
-        I_dx_backward = sanitize_index(I - I_dx, u)
-        I_dy_forward = sanitize_index(I + I_dy, u)
-        I_dy_backward = sanitize_index(I - I_dy, u)
-        I_dplus_forward = sanitize_index(I + I_dplus, u)
-        I_dplus_backward = sanitize_index(I - I_dplus, u)
-        I_dminus_forward = sanitize_index(I + I_dminus, u)
-        I_dminus_backward = sanitize_index(I - I_dminus, u)
+        I_dx_forward = sanitize_index_R2(I + I_dx, u)
+        I_dx_backward = sanitize_index_R2(I - I_dx, u)
+        I_dy_forward = sanitize_index_R2(I + I_dy, u)
+        I_dy_backward = sanitize_index_R2(I - I_dy, u)
+        I_dplus_forward = sanitize_index_R2(I + I_dplus, u)
+        I_dplus_backward = sanitize_index_R2(I - I_dplus, u)
+        I_dminus_forward = sanitize_index_R2(I + I_dminus, u)
+        I_dminus_backward = sanitize_index_R2(I - I_dminus, u)
 
         d_dxx[I] = (
             u[I_dx_forward] -
-            2 * u[I] +
+            u[I] * 2 +
             u[I_dx_backward]
         ) / dxy**2
 
@@ -200,7 +178,7 @@ def central_derivatives_second_order(
 
         d_dyy[I] = (
             u[I_dy_forward] -
-            2 * u[I] +
+            u[I] * 2 +
             u[I_dy_backward]
         ) / dxy**2
 
@@ -283,19 +261,19 @@ def derivatives(
     for I in ti.grouped(u):
         # We do not need to interpolate because we always end up on the grid.
         # Axial
-        I_dx_forward = sanitize_index(I + I_dx, u)
-        I_dx_backward = sanitize_index(I - I_dx, u)
-        I_dy_forward = sanitize_index(I + I_dy, u)
-        I_dy_backward = sanitize_index(I - I_dy, u)
+        I_dx_forward = sanitize_index_R2(I + I_dx, u)
+        I_dx_backward = sanitize_index_R2(I - I_dx, u)
+        I_dy_forward = sanitize_index_R2(I + I_dy, u)
+        I_dy_backward = sanitize_index_R2(I - I_dy, u)
         dx_forward[I] = (u[I_dx_forward] - u[I]) / dxy
         dx_backward[I] = (u[I] - u[I_dx_backward]) / dxy
         dy_forward[I] = (u[I_dy_forward] - u[I]) / dxy
         dy_backward[I] = (u[I] - u[I_dy_backward]) / dxy
         # Diagonal
-        I_dplus_forward = sanitize_index(I + I_dplus, u)
-        I_dplus_backward = sanitize_index(I - I_dplus, u)
-        I_dminus_forward = sanitize_index(I + I_dminus, u)
-        I_dminus_backward = sanitize_index(I - I_dminus, u)
+        I_dplus_forward = sanitize_index_R2(I + I_dplus, u)
+        I_dplus_backward = sanitize_index_R2(I - I_dplus, u)
+        I_dminus_forward = sanitize_index_R2(I + I_dminus, u)
+        I_dminus_backward = sanitize_index_R2(I - I_dminus, u)
         dplus_forward[I] = (u[I_dplus_forward] - u[I]) / (ti.math.sqrt(2) * dxy)
         dplus_backward[I] = (u[I] - u[I_dplus_backward]) / (ti.math.sqrt(2) * dxy)
         dminus_forward[I] = (u[I_dminus_forward] - u[I]) / (ti.math.sqrt(2) * dxy)
@@ -328,12 +306,18 @@ def convolve_with_kernel_x_dir(
         `u_convolved`: ti.field(dtype=ti.f32, shape=shape) of convolution of 
           `u_padded` with `k`.
     """
-    for y, x in u_convolved:
+    # for y, x in u_convolved:
+    #     y_shifted = y + radius
+    #     s = 0.
+    #     for i in range(2*radius+1):
+    #         s+= u_padded[y_shifted, x + i] * k[2*radius+1-i]
+    #     u_convolved[y, x] = s
+    for x, y in u_convolved:
         y_shifted = y + radius
         s = 0.
         for i in range(2*radius+1):
-            s+= u_padded[y_shifted, x + i] * k[2*radius+1-i]
-        u_convolved[y, x] = s
+            s+= u_padded[x + i, y + y_shifted] * k[2*radius+1-i]
+        u_convolved[x, y] = s
 
 @ti.func
 def convolve_with_kernel_y_dir(
@@ -358,12 +342,18 @@ def convolve_with_kernel_y_dir(
         `u_convolved`: ti.field(dtype=ti.f32, shape=shape) of convolution of 
           `u_padded` with `k`.
     """
-    for y, x in u_convolved:
+    # for y, x in u_convolved:
+    #     x_shifted = x + radius
+    #     s = 0.
+    #     for i in range(2*radius+1):
+    #         s+= u_padded[y + i, x_shifted] * k[2*radius+1-i]
+    #     u_convolved[y, x] = s
+    for x, y in u_convolved:
         x_shifted = x + radius
         s = 0.
         for i in range(2*radius+1):
-            s+= u_padded[y + i, x_shifted] * k[2*radius+1-i]
-        u_convolved[y, x] = s
+            s+= u_padded[x_shifted, y + i] * k[2*radius+1-i]
+        u_convolved[x, y] = s
 
 def gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):
     """Compute kernel for 1D Gaussian derivative of order `order` at scale `σ`.
