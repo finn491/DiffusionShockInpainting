@@ -2,22 +2,29 @@
 
 import taichi as ti
 import numpy as np
-import inpainting
+from dsfilter.R2.switches import (
+    DS_switch,
+    morphological_switch
+)
+from dsfilter.R2.derivatives import (
+    laplacian,
+    dilation,
+    gaussian_derivative_kernel
+)
 
 
 def DS_filter_R2(u0, ν, λ, σ, dxy, T):
     dt = compute_timestep(dxy)
     n = int(T / dt)
-    k_DS, radius_DS = inpainting.derivativesR2.gaussian_derivative_kernel(ν, 1)
-    k_morph, radius_morph = inpainting.derivativesR2.gaussian_derivative_kernel(σ, 1)
+    k_DS, radius_DS = gaussian_derivative_kernel(ν, 1)
+    k_morph, radius_morph = gaussian_derivative_kernel(σ, 1)
     for _ in range(n):
-        inpainting.switches.DS_switch(u_DS, k_DS, radius_DS, λ, d_dx, d_dy, switch_DS)
-        inpainting.switches.morphological_switch(u_morph, k_morph, radius_morph, dxy, d_dx, d_dy, c, s, u, d_dxx, d_dxy, 
-                                                 d_dyy, switch_morph)
-        inpainting.derivativesR2.laplacian(u, dxy, laplacian_u)
-        inpainting.derivativesR2.dilation(u, dxy, dx_forward, dx_backward, dy_forward, dy_backward, dplus_forward, 
-                                          dplus_backward, dminus_forward, dminus_backward, abs_dx, abs_dy, abs_dplus, 
-                                          abs_dminus, dilation_u) 
+        DS_switch(u_DS, k_DS, radius_DS, λ, d_dx, d_dy, switch_DS)
+        morphological_switch(u_morph, k_morph, radius_morph, dxy, d_dx, d_dy, c, s, u, d_dxx, d_dxy, d_dyy,
+                             switch_morph)
+        laplacian(u, dxy, laplacian_u)
+        dilation(u, dxy, dx_forward, dx_backward, dy_forward, dy_backward, dplus_forward, dplus_backward,
+                 dminus_forward, dminus_backward, abs_dx, abs_dy, abs_dplus, abs_dminus, dilation_u) 
         step_DS_filter(u, switch_DS, switch_morph, laplacian_u, dilation_u)
         # Deal with BCs.
 

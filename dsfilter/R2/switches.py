@@ -1,7 +1,12 @@
 # switches.py
 
 import taichi as ti
-import inpainting
+from dsfilter.R2.derivatives import (
+    convolve_with_kernel_x_dir,
+    convolve_with_kernel_y_dir,
+    sanitize_index,
+    central_derivatives_second_order
+)
 
 # Diffusion-Shock
 
@@ -38,8 +43,8 @@ def DS_switch(
         `switch`: ti.field(dtype=ti.f32, shape=shape) of values that determine
           the degree of diffusion or shock, taking values between 0 and 1.
     """
-    inpainting.derivativesR2.convolve_with_kernel_x_dir(u_padded, k, radius, d_dx)
-    inpainting.derivativesR2.convolve_with_kernel_y_dir(u_padded, k, radius, d_dy)
+    convolve_with_kernel_x_dir(u_padded, k, radius, d_dx)
+    convolve_with_kernel_y_dir(u_padded, k, radius, d_dy)
     for I in ti.grouped(switch):
         switch[I] = g_scalar(d_dx[I]**2 + d_dy[I]**2, λ)
 
@@ -116,14 +121,14 @@ def sobel_gradient(
     I_dplus = I_dx + I_dy  # Positive diagonal
     I_dminus = I_dx - I_dy # Negative diagonal
     for I in ti.grouped(u):
-        I_dx_forward = inpainting.sanitize_index(I + I_dx, u)
-        I_dx_backward = inpainting.sanitize_index(I - I_dx, u)
-        I_dy_forward = inpainting.sanitize_index(I + I_dy, u)
-        I_dy_backward = inpainting.sanitize_index(I - I_dy, u)
-        I_dplus_forward = inpainting.sanitize_index(I + I_dplus, u)
-        I_dplus_backward = inpainting.sanitize_index(I - I_dplus, u)
-        I_dminus_forward = inpainting.sanitize_index(I + I_dminus, u)
-        I_dminus_backward = inpainting.sanitize_index(I - I_dminus, u)
+        I_dx_forward = sanitize_index(I + I_dx, u)
+        I_dx_backward = sanitize_index(I - I_dx, u)
+        I_dy_forward = sanitize_index(I + I_dy, u)
+        I_dy_backward = sanitize_index(I - I_dy, u)
+        I_dplus_forward = sanitize_index(I + I_dplus, u)
+        I_dplus_backward = sanitize_index(I - I_dplus, u)
+        I_dminus_forward = sanitize_index(I + I_dminus, u)
+        I_dminus_backward = sanitize_index(I - I_dminus, u)
         # du/dx Stencil
         # -1 | 0 | 1
         # -2 | 0 | 2
@@ -194,7 +199,7 @@ def morphological_switch(
           the degree of dilation or erosion, taking values between -1 and 1.
     """
     find_dominant_eigenvector(u_padded, k, radius, d_dx, d_dy, c, s)
-    inpainting.derivativesR2.central_derivatives_second_order(u, dxy, d_dxx, d_dxy, d_dyy)
+    central_derivatives_second_order(u, dxy, d_dxx, d_dxy, d_dyy)
     for I in ti.grouped(switch):
         switch[I] = ti.math.sign(c[I]**2 * d_dxx[I] + 2 * c[I] * s[I] * d_dxy[I] + s[I]**2 * d_dyy[I])
 
@@ -239,8 +244,8 @@ def find_dominant_eigenvector(
         `s`: ti.field(dtype=ti.f32, shape=shape) of second components of the
           normalised dominant eigenvectors, as in Eq. (15).
     """
-    inpainting.derivativesR2.convolve_with_kernel_x_dir(u_padded, k, radius, d_dx)
-    inpainting.derivativesR2.convolve_with_kernel_y_dir(u_padded, k, radius, d_dy)
+    convolve_with_kernel_x_dir(u_padded, k, radius, d_dx)
+    convolve_with_kernel_y_dir(u_padded, k, radius, d_dy)
     for I in ti.grouped(c):
         norm = ti.math.sqrt(d_dx[I]**2 + d_dy[I]**2)
         c[I] = d_dx[I] / norm
