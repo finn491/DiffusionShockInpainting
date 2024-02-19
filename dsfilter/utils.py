@@ -1,12 +1,111 @@
-# cleanarrays.py
+"""
+    utils
+    =====
 
-import taichi as ti
+    Provides miscellaneous computational utilities that can be used both on R^2
+    and SE(2).
+"""
+
 import numpy as np
-from PIL import Image
-import matplotlib.pyplot as plt
+import taichi as ti
 
-# NumPy Arrays
 
+# Interpolation
+
+@ti.func
+def linear_interpolate(
+    v0: ti.f32,
+    v1: ti.f32,
+    r: ti.i32
+) -> ti.f32:
+    """
+    @taichi.func
+
+    Interpolate value of the points `v*` depending on the distance `r`, via 
+    linear interpolation. Adapted from Gijs.
+
+    Args:
+        `v*`: values at points between which we want to interpolate, taking real 
+          values.
+        `r`: distance to the points between which we to interpolate, taking real
+          values.
+
+    Returns:
+        Interpolated value.
+    """
+    return v0 * (1.0 - r) + v1 * r
+
+# Safe Indexing
+
+@ti.func
+def sanitize_index_R2(
+    index: ti.types.vector(2, ti.i32),
+    input: ti.template()
+) -> ti.types.vector(2, ti.i32):
+    """
+    @taichi.func
+    
+    Make sure the `index` is inside the shape of `input`. Adapted from Gijs.
+
+    Args:
+        `index`: ti.types.vector(n=2, dtype=ti.i32) index.
+        `input`: ti.field in which we want to index.
+
+    Returns:
+        ti.types.vector(n=2, dtype=ti.i32) of index that is within `input`.
+    """
+    shape = ti.Vector(ti.static(input.shape), dt=ti.i32)
+    return ti.Vector([
+        ti.math.clamp(index[0], 0, shape[0] - 1),
+        ti.math.clamp(index[1], 0, shape[1] - 1),
+    ], dt=ti.i32)
+
+@ti.func
+def sanitize_index_SE2(
+    index: ti.types.vector(3, ti.i32),
+    input: ti.template()
+) -> ti.types.vector(3, ti.i32):
+    """
+    @taichi.func
+    
+    Make sure the `index` is inside the shape of `input`. Copied from Gijs Bellaard.
+
+    Args:
+        `index`: ti.types.vector(n=3, dtype=ti.i32) index.
+        `input`: ti.field in which we want to index.
+
+    Returns:
+        ti.types.vector(n=3, dtype=ti.i32) of index that is within `input`.
+    """
+    shape = ti.Vector(ti.static(input.shape), dt=ti.i32)
+    return ti.Vector([
+        ti.math.clamp(index[0], 0, shape[0] - 1),
+        ti.math.clamp(index[1], 0, shape[1] - 1),
+        ti.math.mod(index[2], shape[2])
+    ], dt=ti.i32)
+
+# Derivatives
+
+@ti.func
+def select_upwind_derivative(
+    d_forward: ti.f32,
+    d_backward: ti.f32
+) -> ti.f32:
+    """
+    @taichi.func
+
+    Select the correct derivative for the upwind derivative.
+
+    Args:
+        `d_forward`: derivative in the forward direction.
+        `d_backward`: derivative in the backward direction.
+          
+    Returns:
+        derivative in the correct direction.
+    """
+    return ti.math.max(-d_forward, d_backward, 0) * (-1.)**(-d_forward >= d_backward)
+
+# Padding
 
 def pad_array(u, pad_value=0., pad_shape=1):
     """
@@ -62,48 +161,22 @@ def unpad_array(u, pad_shape=1):
     centre_slice = extract_centre_slice(u, pad_shape=pad_shape)
     return u[centre_slice]
 
-def convert_array_to_image(image_array):
-    """Convert numpy array `image_array` to a grayscale PIL Image object."""
-    if image_array.dtype == "uint8":
-        image = Image.fromarray(image_array, mode="L")
-    else:
-        image = Image.fromarray((image_array * 255).astype("uint8"), mode="L")
-    return image
+# Initialisation
 
-def image_rescale(image_array, new_max=1.):
-    """
-    Affinely rescale values in numpy array `image_array` to be between 0. and
-    `new_max`.
-    """
-    image_max = image_array.max()
-    image_min = image_array.min()
-    return new_max * (image_array - image_min) / (image_max - image_min)
+def get_padded_cost(cost_unpadded, pad_shape=1, pad_value=1.):
+    """Pad the cost function `cost_unpadded` and convert to TaiChi object."""
+    cost_np = pad_array(cost_unpadded, pad_value=pad_value, pad_shape=pad_shape)
+    cost = ti.field(dtype=ti.f32, shape=cost_np.shape)
+    cost.from_numpy(cost_np)
+    return cost
 
-def view_image_array(image_array):
-    """View numpy array `image_array` as a grayscale image."""
-    image = convert_array_to_image(image_array)
-    fig, ax = plt.subplots(nrows=1, ncols=1, figsize=(10, 10))
-    ax.imshow(image, cmap="gray", origin="upper")
-    ax.set_axis_off()
-    return image, fig, ax
-
-def view_image_arrays_side_by_side(image_array_list):
-    """
-    View list of numpy array `image_array_list` side by side as grayscale 
-    images.
-    """
-    image_list = []
-    ncols = len(image_array_list)
-    fig, ax = plt.subplots(nrows=1, ncols=ncols, figsize=(5 * ncols, 5))
-    for i, image_array in enumerate(image_array_list):
-        image = convert_array_to_image(image_array)
-        image_list.append(image)
-        ax[i].imshow(image_array, cmap="gray", origin="upper")
-        ax[i].set_axis_off()
-    return image_list, fig, ax
-
-# TaiChi Fields
-
+def get_initial_W(shape, initial_condition=100., pad_shape=1):
+    """Initialise the (approximate) distance map as TaiChi object."""
+    W_unpadded = np.full(shape=shape, fill_value=initial_condition)
+    W_np = pad_array(W_unpadded, pad_value=initial_condition, pad_shape=pad_shape)
+    W = ti.field(dtype=ti.f32, shape=W_np.shape)
+    W.from_numpy(W_np)
+    return W
 
 @ti.kernel
 def apply_boundary_conditions(
@@ -132,3 +205,37 @@ def apply_boundary_conditions(
     """
     for I in ti.grouped(boundarypoints):
         u[boundarypoints[I]] = boundaryvalues[I]
+
+# Image Preprocessing
+        
+def image_rescale(image_array, new_max=1.):
+    """
+    Affinely rescale values in numpy array `image_array` to be between 0. and
+    `new_max`.
+    """
+    image_max = image_array.max()
+    image_min = image_array.min()
+    return new_max * (image_array - image_min) / (image_max - image_min)
+
+# TaiChi Stuff
+
+@ti.kernel
+def sparse_to_dense(
+    sparse_thing: ti.template(),
+    dense_thing: ti.template()
+):
+    """
+    @taichi.func
+
+    Convert a sparse TaiChi object on an SNode into a dense object.
+
+    Args:
+      Static:
+        `sparse_thing`: Sparse TaiChi object.
+      Mutated:
+        `dense_thing`: Preinitialised dense TaiChi object of correct size, which
+          is updated in place.
+    """
+    for I in ti.grouped(sparse_thing):
+        dense_thing[I] = sparse_thing[I]
+    sparse_thing.deactivate()
