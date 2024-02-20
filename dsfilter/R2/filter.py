@@ -9,7 +9,7 @@ from dsfilter.R2.switches import (
 )
 from dsfilter.R2.derivatives import (
     laplacian,
-    dilation,
+    morphological,
     gaussian_derivative_kernel
 )
 from dsfilter.R2.metric import (
@@ -68,6 +68,7 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, dxy, T):
     ## Sobel derivatives
     laplacian_u = ti.field(dtype=ti.f32, shape=shape)
     dilation_u = ti.field(dtype=ti.f32, shape=shape)
+    erosion_u = ti.field(dtype=ti.f32, shape=shape)
     dx_forward = ti.field(dtype=ti.f32, shape=shape)
     dx_backward = ti.field(dtype=ti.f32, shape=shape)
     dy_forward = ti.field(dtype=ti.f32, shape=shape)
@@ -76,19 +77,25 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, dxy, T):
     dplus_backward = ti.field(dtype=ti.f32, shape=shape)
     dminus_forward = ti.field(dtype=ti.f32, shape=shape)
     dminus_backward = ti.field(dtype=ti.f32, shape=shape)
-    abs_dx = ti.field(dtype=ti.f32, shape=shape)
-    abs_dy = ti.field(dtype=ti.f32, shape=shape)
-    abs_dplus = ti.field(dtype=ti.f32, shape=shape)
-    abs_dminus = ti.field(dtype=ti.f32, shape=shape)
+    abs_dx_dilation = ti.field(dtype=ti.f32, shape=shape)
+    abs_dy_dilation = ti.field(dtype=ti.f32, shape=shape)
+    abs_dplus_dilation = ti.field(dtype=ti.f32, shape=shape)
+    abs_dminus_dilation = ti.field(dtype=ti.f32, shape=shape)
+    abs_dx_erosion = ti.field(dtype=ti.f32, shape=shape)
+    abs_dy_erosion = ti.field(dtype=ti.f32, shape=shape)
+    abs_dplus_erosion = ti.field(dtype=ti.f32, shape=shape)
+    abs_dminus_erosion = ti.field(dtype=ti.f32, shape=shape)
 
     for _ in tqdm(range(n)):
         DS_switch(u_DS, k_DS, radius_DS, λ, d_dx, d_dy, switch_DS)
         morphological_switch(u_morph, k_morph, radius_morph, dxy, d_dx, d_dy, c, s, u, d_dxx, d_dxy, d_dyy,
                              switch_morph)
         laplacian(u, dxy, laplacian_u)
-        dilation(u, dxy, dx_forward, dx_backward, dy_forward, dy_backward, dplus_forward, dplus_backward,
-                 dminus_forward, dminus_backward, abs_dx, abs_dy, abs_dplus, abs_dminus, dilation_u) 
-        step_DS_filter(u, dt, switch_DS, switch_morph, laplacian_u, dilation_u)
+        morphological(u, dxy, dx_forward, dx_backward, dy_forward, dy_backward, dplus_forward, dplus_backward, 
+                      dminus_forward, dminus_backward, abs_dx_dilation, abs_dy_dilation, abs_dplus_dilation,
+                      abs_dminus_dilation, dilation_u, abs_dx_erosion, abs_dy_erosion, abs_dplus_erosion,
+                      abs_dminus_erosion, erosion_u)
+        step_DS_filter(u, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u)
         apply_mask(u, u0, mask)
         fix_reflected_padding(u)
         fix_switch_padding(u, radius_DS, u_DS)
@@ -129,7 +136,8 @@ def step_DS_filter(
     switch_DS: ti.template(),
     switch_morph: ti.template(),
     laplacian_u: ti.template(),
-    dilation_u: ti.template()
+    dilation_u: ti.template(),
+    erosion_u: ti.template()
 ):
     """
     @taichi.kernel
@@ -147,7 +155,14 @@ def step_DS_filter(
           which is updated in place.
     """
     for I in ti.grouped(u):
-        u[I] += dt * (switch_DS[I] * laplacian_u[I] - (1 - switch_DS[I]) * switch_morph[I] * dilation_u[I])
+        u[I] += dt * (
+            switch_DS[I] * laplacian_u[I] - 
+            (1 - switch_DS[I]) * (
+                switch_morph[I] * dilation_u[I] +
+                (1 - switch_morph[I]) * erosion_u[I]
+            )
+        )
+        
 
 # Fix padding function
         

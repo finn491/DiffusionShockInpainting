@@ -99,7 +99,7 @@ def laplacian(
         )
 
 @ti.kernel
-def dilation(
+def morphological(
     u: ti.template(),
     dxy: ti.f32,
     dx_forward: ti.template(),
@@ -110,11 +110,16 @@ def dilation(
     dplus_backward: ti.template(),
     dminus_forward: ti.template(),
     dminus_backward: ti.template(),
-    abs_dx: ti.template(),
-    abs_dy: ti.template(),
-    abs_dplus: ti.template(),
-    abs_dminus: ti.template(),
-    dilation_u: ti.template()
+    abs_dx_dilation: ti.template(),
+    abs_dy_dilation: ti.template(),
+    abs_dplus_dilation: ti.template(),
+    abs_dminus_dilation: ti.template(),
+    dilation_u: ti.template(),
+    abs_dx_erosion: ti.template(),
+    abs_dy_erosion: ti.template(),
+    abs_dplus_erosion: ti.template(),
+    abs_dminus_erosion: ti.template(),
+    erosion_u: ti.template()
 ):
     """
     @taichi.kernel
@@ -134,12 +139,18 @@ def dilation(
     """
     δ = ti.math.sqrt(2) - 1 # Good value for rotation invariance according to M. Welk and J. Weickert (2021)
     abs_derivatives(u, dxy, dx_forward, dx_backward, dy_forward, dy_backward, dplus_forward, dplus_backward, 
-                    dminus_forward, dminus_backward, abs_dx, abs_dy, abs_dplus, abs_dminus) 
+                    dminus_forward, dminus_backward, abs_dx_dilation, abs_dy_dilation, abs_dplus_dilation,
+                    abs_dminus_dilation, abs_dx_erosion, abs_dy_erosion, abs_dplus_erosion, abs_dminus_erosion) 
     for I in ti.grouped(u):
         # Axial 
-        dilation_u[I] = (1 - δ) * ti.math.sqrt(abs_dx[I]**2 + abs_dy[I]**2)
+        dilation_u[I] = (1 - δ) * ti.math.sqrt(abs_dx_dilation[I]**2 + abs_dy_dilation[I]**2)
         # Diagonal
-        dilation_u[I] += δ * ti.math.sqrt(abs_dplus[I]**2 + abs_dminus[I]**2)
+        dilation_u[I] += δ * ti.math.sqrt(abs_dplus_dilation[I]**2 + abs_dminus_dilation[I]**2)
+
+        # Axial 
+        erosion_u[I] = -(1 - δ) * ti.math.sqrt(abs_dx_erosion[I]**2 + abs_dy_erosion[I]**2)
+        # Diagonal
+        erosion_u[I] -= δ * ti.math.sqrt(abs_dplus_erosion[I]**2 + abs_dminus_erosion[I]**2)
 
 @ti.func
 def central_derivatives_second_order(
@@ -194,10 +205,14 @@ def abs_derivatives(
     dplus_backward: ti.template(),
     dminus_forward: ti.template(),
     dminus_backward: ti.template(),
-    abs_dx: ti.template(),
-    abs_dy: ti.template(),
-    abs_dplus: ti.template(),
-    abs_dminus: ti.template()
+    abs_dx_dilation: ti.template(),
+    abs_dy_dilation: ti.template(),
+    abs_dplus_dilation: ti.template(),
+    abs_dminus_dilation: ti.template(),
+    abs_dx_erosion: ti.template(),
+    abs_dy_erosion: ti.template(),
+    abs_dplus_erosion: ti.template(),
+    abs_dminus_erosion: ti.template()
 ):
     """
     @taichi.func
@@ -220,11 +235,18 @@ def abs_derivatives(
                 dminus_backward)
     for I in ti.grouped(u):
         # Axial
-        abs_dx[I] = ti.math.max(-dx_forward[I], dx_backward[I], 0)
-        abs_dy[I] = ti.math.max(-dy_forward[I], dy_backward[I], 0)
+        abs_dx_dilation[I] = ti.math.max(dx_forward[I], -dx_backward[I], 0)
+        abs_dy_dilation[I] = ti.math.max(dy_forward[I], -dy_backward[I], 0)
         # Diagonal
-        abs_dplus[I] = ti.math.max(-dplus_forward[I], dplus_backward[I], 0)
-        abs_dminus[I] = ti.math.max(-dminus_forward[I], dminus_backward[I], 0)
+        abs_dplus_dilation[I] = ti.math.max(dplus_forward[I], -dplus_backward[I], 0)
+        abs_dminus_dilation[I] = ti.math.max(dminus_forward[I], -dminus_backward[I], 0)
+
+        # Axial
+        abs_dx_erosion[I] = ti.math.max(-dx_forward[I], dx_backward[I], 0)
+        abs_dy_erosion[I] = ti.math.max(-dy_forward[I], dy_backward[I], 0)
+        # Diagonal
+        abs_dplus_erosion[I] = ti.math.max(-dplus_forward[I], dplus_backward[I], 0)
+        abs_dminus_erosion[I] = ti.math.max(-dminus_forward[I], dminus_backward[I], 0)
 
 @ti.func
 def derivatives(
