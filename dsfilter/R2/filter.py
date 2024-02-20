@@ -156,10 +156,10 @@ def step_DS_filter(
     """
     for I in ti.grouped(u):
         u[I] += dt * (
-            switch_DS[I] * laplacian_u[I] - 
+            laplacian_u[I] * switch_DS[I] - 
             (1 - switch_DS[I]) * (
-                switch_morph[I] * dilation_u[I] +
-                (1 - switch_morph[I]) * erosion_u[I]
+                erosion_u[I] * (switch_morph[I] + 1) / 2  +
+                dilation_u[I] * (1 - switch_morph[I]) / 2
             )
         )
         
