@@ -12,18 +12,9 @@ from dsfilter.R2.derivatives import (
     morphological,
     gaussian_derivative_kernel
 )
-from dsfilter.R2.metric import (
-    align_to_real_axis_scalar_field,
-    align_to_standard_array_axis_scalar_field
-)
 from dsfilter.utils import unpad_array
 
 def DS_filter_R2(u0_np, mask_np, ν, λ, σ, dxy, T):
-    # Align with (x, y)-frame
-    u0_np = align_to_real_axis_scalar_field(u0_np)
-    mask_np = align_to_real_axis_scalar_field(mask_np)
-    # shape = u0.shape
-
     # Set hyperparameters
     dt = compute_timestep(dxy)
     n = int(T / dt)
@@ -101,11 +92,9 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, dxy, T):
         fix_switch_padding(u, radius_DS, u_DS)
         fix_switch_padding(u, radius_morph, u_morph)
 
-    # Align with (I, J)-frame    
+    # Cleanup   
     u_np = u.to_numpy()
-    u_np = unpad_array(u_np, pad_shape=1)
-    u_np = align_to_standard_array_axis_scalar_field(u_np)
-    return u_np
+    return unpad_array(u_np, pad_shape=1)
 
 def compute_timestep(dxy, δ=np.sqrt(2)-1):
     """

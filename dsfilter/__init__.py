@@ -14,6 +14,7 @@
 
 # Access entire backend
 import dsfilter.utils
+import dsfilter.visualisations
 import dsfilter.R2
 
 # Most important functions are available at top level

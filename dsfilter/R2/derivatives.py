@@ -1,7 +1,7 @@
 # derivativesR2.py
 
 import taichi as ti
-from dsfilter.utils import sanitize_index_R2
+from dsfilter.R2.utils import sanitize_index
 
 # Helper Functions
 
@@ -67,14 +67,14 @@ def laplacian(
     I_dplus = I_dx + I_dy  # Positive diagonal
     I_dminus = I_dx - I_dy # Negative diagonal
     for I in ti.grouped(u):
-        I_dx_forward = sanitize_index_R2(I + I_dx, u)
-        I_dx_backward = sanitize_index_R2(I - I_dx, u)
-        I_dy_forward = sanitize_index_R2(I + I_dy, u)
-        I_dy_backward = sanitize_index_R2(I - I_dy, u)
-        I_dplus_forward = sanitize_index_R2(I + I_dplus, u)
-        I_dplus_backward = sanitize_index_R2(I - I_dplus, u)
-        I_dminus_forward = sanitize_index_R2(I + I_dminus, u)
-        I_dminus_backward = sanitize_index_R2(I - I_dminus, u)
+        I_dx_forward = sanitize_index(I + I_dx, u)
+        I_dx_backward = sanitize_index(I - I_dx, u)
+        I_dy_forward = sanitize_index(I + I_dy, u)
+        I_dy_backward = sanitize_index(I - I_dy, u)
+        I_dplus_forward = sanitize_index(I + I_dplus, u)
+        I_dplus_backward = sanitize_index(I - I_dplus, u)
+        I_dminus_forward = sanitize_index(I + I_dminus, u)
+        I_dminus_backward = sanitize_index(I - I_dminus, u)
         # Axial Stencil
         # 0 |  1 | 0
         # 1 | -4 | 1
@@ -165,14 +165,14 @@ def central_derivatives_second_order(
     I_dplus = I_dx + I_dy  # Positive diagonal
     I_dminus = I_dx - I_dy # Negative diagonal
     for I in ti.grouped(u):
-        I_dx_forward = sanitize_index_R2(I + I_dx, u)
-        I_dx_backward = sanitize_index_R2(I - I_dx, u)
-        I_dy_forward = sanitize_index_R2(I + I_dy, u)
-        I_dy_backward = sanitize_index_R2(I - I_dy, u)
-        I_dplus_forward = sanitize_index_R2(I + I_dplus, u)
-        I_dplus_backward = sanitize_index_R2(I - I_dplus, u)
-        I_dminus_forward = sanitize_index_R2(I + I_dminus, u)
-        I_dminus_backward = sanitize_index_R2(I - I_dminus, u)
+        I_dx_forward = sanitize_index(I + I_dx, u)
+        I_dx_backward = sanitize_index(I - I_dx, u)
+        I_dy_forward = sanitize_index(I + I_dy, u)
+        I_dy_backward = sanitize_index(I - I_dy, u)
+        I_dplus_forward = sanitize_index(I + I_dplus, u)
+        I_dplus_backward = sanitize_index(I - I_dplus, u)
+        I_dminus_forward = sanitize_index(I + I_dminus, u)
+        I_dminus_backward = sanitize_index(I - I_dminus, u)
 
         d_dxx[I] = (
             u[I_dx_forward] -
@@ -283,19 +283,19 @@ def derivatives(
     for I in ti.grouped(u):
         # We do not need to interpolate because we always end up on the grid.
         # Axial
-        I_dx_forward = sanitize_index_R2(I + I_dx, u)
-        I_dx_backward = sanitize_index_R2(I - I_dx, u)
-        I_dy_forward = sanitize_index_R2(I + I_dy, u)
-        I_dy_backward = sanitize_index_R2(I - I_dy, u)
+        I_dx_forward = sanitize_index(I + I_dx, u)
+        I_dx_backward = sanitize_index(I - I_dx, u)
+        I_dy_forward = sanitize_index(I + I_dy, u)
+        I_dy_backward = sanitize_index(I - I_dy, u)
         dx_forward[I] = (u[I_dx_forward] - u[I]) / dxy
         dx_backward[I] = (u[I] - u[I_dx_backward]) / dxy
         dy_forward[I] = (u[I_dy_forward] - u[I]) / dxy
         dy_backward[I] = (u[I] - u[I_dy_backward]) / dxy
         # Diagonal
-        I_dplus_forward = sanitize_index_R2(I + I_dplus, u)
-        I_dplus_backward = sanitize_index_R2(I - I_dplus, u)
-        I_dminus_forward = sanitize_index_R2(I + I_dminus, u)
-        I_dminus_backward = sanitize_index_R2(I - I_dminus, u)
+        I_dplus_forward = sanitize_index(I + I_dplus, u)
+        I_dplus_backward = sanitize_index(I - I_dplus, u)
+        I_dminus_forward = sanitize_index(I + I_dminus, u)
+        I_dminus_backward = sanitize_index(I - I_dminus, u)
         dplus_forward[I] = (u[I_dplus_forward] - u[I]) / (ti.math.sqrt(2) * dxy)
         dplus_backward[I] = (u[I] - u[I_dplus_backward]) / (ti.math.sqrt(2) * dxy)
         dminus_forward[I] = (u[I_dminus_forward] - u[I]) / (ti.math.sqrt(2) * dxy)
