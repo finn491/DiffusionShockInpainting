@@ -38,14 +38,33 @@ def linear_interpolate(
 # Derivatives
 
 @ti.func
-def select_upwind_derivative(
+def select_upwind_derivative_dilation(
     d_forward: ti.f32,
     d_backward: ti.f32
 ) -> ti.f32:
     """
     @taichi.func
 
-    Select the correct derivative for the upwind derivative.
+    Select the correct derivative for the upwind derivative of dilation.
+
+    Args:
+        `d_forward`: derivative in the forward direction.
+        `d_backward`: derivative in the backward direction.
+          
+    Returns:
+        derivative in the correct direction.
+    """
+    return ti.math.max(d_forward, -d_backward, 0) * (-1.)**(-d_forward >= d_backward)
+
+@ti.func
+def select_upwind_derivative_erosion(
+    d_forward: ti.f32,
+    d_backward: ti.f32
+) -> ti.f32:
+    """
+    @taichi.func
+
+    Select the correct derivative for the upwind derivative of erosion.
 
     Args:
         `d_forward`: derivative in the forward direction.

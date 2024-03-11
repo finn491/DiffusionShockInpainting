@@ -59,8 +59,8 @@ def plot_image_array(image_array, x_min, x_max, y_min, y_max, cmap="gray", figsi
 
     image_array_aligned = align_to_standard_array_axis_scalar_field(image_array)
 
-    ax.imshow(image_array_aligned, cmap=cmap, extent=(x_min, x_max, y_min, y_max))
-    return fig, ax
+    cbar = ax.imshow(image_array_aligned, cmap=cmap, extent=(x_min, x_max, y_min, y_max))
+    return fig, ax, cbar
 
 # def plot_image_array_SO3(image_array, α_min, α_max, β_min, β_max, cmap="gray", figsize=(10, 10), fig=None, ax=None):
 #     """Plot `image_array` as a heatmap."""
