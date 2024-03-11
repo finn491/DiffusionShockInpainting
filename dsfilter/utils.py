@@ -124,9 +124,9 @@ def unpad_array(u, pad_shape=1):
 
     Returns:
         np.ndarray of the unpadded array. Note that 
-        `unpad_array(*, pad_shape=pad_shape)` is the left-inverse of
-        `pad_array(*, pad_value=pad_value, pad_shape=pad_shape)` for all
-        `pad_value`, `pad_shape`.
+          `unpad_array(*, pad_shape=pad_shape)` is the left-inverse of
+          `pad_array(*, pad_value=pad_value, pad_shape=pad_shape)` for all
+          `pad_value`, `pad_shape`.
     """
     centre_slice = extract_centre_slice(u, pad_shape=pad_shape)
     return u[centre_slice]

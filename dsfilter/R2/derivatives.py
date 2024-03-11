@@ -58,12 +58,12 @@ def laplacian(
 
     Args:
       Static:
-        `u`: ti.field(dtype=[float], shape=shape) which we want to 
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) which we want to 
           differentiate.
         `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
-        `laplacian_u`: ti.field(dtype=[float], shape=shape) of laplacian of `u`,
-          which is updated in place.
+        `laplacian_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of laplacian of
+          `u`, which is updated in place.
     """
     δ = ti.math.sqrt(2) - 1 # Good value for rotation invariance according to M. Welk and J. Weickert (2021)
     I_dx = ti.Vector([1, 0], dt=ti.i32)
@@ -118,13 +118,13 @@ def morphological(
 
     Args:
       Static:
-        `u`: ti.field(dtype=[float], shape=shape) which we want to 
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) which we want to 
           differentiate.
         `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
-        `dilation_u`: ti.field(dtype=[float], shape=shape) of |grad `u`|,
+        `dilation_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of |grad `u`|,
           which is updated in place.
-        `erosion_u`: ti.field(dtype=[float], shape=shape) of -|grad `u`|,
+        `erosion_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of -|grad `u`|,
           which is updated in place.
     """
     δ = ti.math.sqrt(2) - 1 # Good value for rotation invariance according to M. Welk and J. Weickert (2021)
@@ -292,6 +292,20 @@ def central_derivatives_second_order(
     d_dxy: ti.template(),
     d_dyy: ti.template()
 ):
+    """
+    @taichi.func
+
+    Compute the second order derivatives of `u` using central differences.
+
+    Args:
+      Static:
+        `u`: ti.field(dtype=[float]) which we want to 
+          differentiate.
+        `dxy`: step size in x and y direction, taking values greater than 0.
+      Mutated:
+        `d_d**`: ti.field(dtype=[float], shape=[Nx, Ny]) of d* d* `u`, which is
+          updated in place.
+    """
     I_dx = ti.Vector([1, 0], dt=ti.i32)
     I_dy = ti.Vector([0, 1], dt=ti.i32)
     I_dplus = I_dx + I_dy  # Positive diagonal
@@ -343,13 +357,13 @@ def convolve_with_kernel_x_dir(
 
     Args:
       Static:
-        `u_padded`: ti.field(dtype=ti.f32, shape=shape_padded) of array to be
-          convolved, with shape_padded[i] = shape[i] + 2 * `radius`.
+        `u_padded`: ti.field(dtype=[float], shape=[Nx+2*`radius`, Ny]) array to
+          be convolved.
         `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel.
         `radius`: radius at which kernel `k` is truncated, taking integer values
           greater than 0.
       Mutated:
-        `u_convolved`: ti.field(dtype=ti.f32, shape=shape) of convolution of 
+        `u_convolved`: ti.field(dtype=[float], shape=[Nx, Ny]) of convolution of 
           `u_padded` with `k`.
     """
     for x, y in u_convolved:
@@ -373,13 +387,13 @@ def convolve_with_kernel_y_dir(
 
     Args:
       Static:
-        `u_padded`: ti.field(dtype=ti.f32, shape=shape_padded) of array to be
-          convolved, with shape_padded[i] = shape[i] + 2 * `radius`.
-        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel.
+        `u_padded`: ti.field(dtype=[float], shape=[Nx, Ny+2*`radius`]) array to
+          be convolved.
+        `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel.
         `radius`: radius at which kernel `k` is truncated, taking integer values
           greater than 0.
       Mutated:
-        `u_convolved`: ti.field(dtype=ti.f32, shape=shape) of convolution of 
+        `u_convolved`: ti.field(dtype=[float], shape=[Nx, Ny]) of convolution of 
           `u_padded` with `k`.
     """
     for x, y in u_convolved:
@@ -402,7 +416,7 @@ def gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):
         `dxy`: step size in x and y direction, taking values greater than 0.
 
     Returns:
-        Tuple ti.field(dtype=ti.f32, shape=2*radius+1) of the Gaussian kernel
+        Tuple ti.field(dtype=[float], shape=2*radius+1) of the Gaussian kernel
           and the radius of the kernel.
     """
     radius = int(σ * truncate + 0.5)
@@ -437,7 +451,7 @@ def gaussian_derivative_kernel_order_0(
           greater than 0.
         `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
-        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel, which is
+        `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel, which is
           updated in place.
     """
     ti.loop_config(serialize=True)
@@ -468,7 +482,7 @@ def gaussian_derivative_kernel_order_1(
           greater than 0.
         `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
-        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel, which is
+        `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel, which is
           updated in place.
     """
     moment = 0.

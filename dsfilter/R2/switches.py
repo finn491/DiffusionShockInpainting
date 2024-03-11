@@ -30,18 +30,19 @@ def DS_switch(
 
     Args:
       Static:
-        `u_padded`: ti.field(dtype=ti.f32, shape=shape_padded) of array to be
-          convolved, with shape_padded[i] = shape[i] + 2 * `radius`.
+        `u_padded`: ti.field(dtype=ti.f32, shape=[Nx+2*`radius`, Ny+2*`radius`])
+          array to be convolved.
         `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of first order Gaussian
           derivative kernel.
         `radius`: radius at which kernel `k` is truncated, taking integer values
           greater than 0.
         `λ`: contrast parameter, taking values greater than 0.
       Mutated:
-        `d_d*`: ti.field(dtype=ti.f32, shape=shape) of Gaussian derivatives,
+        `d_d*`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of Gaussian derivatives,
           which are updated in place.
-        `switch`: ti.field(dtype=ti.f32, shape=shape) of values that determine
-          the degree of diffusion or shock, taking values between 0 and 1.
+        `switch`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of values that
+          determine the degree of diffusion or shock, taking values between 0
+          and 1, which is updated in place.
     """
     convolve_with_kernel_x_dir(u_padded, k, radius, d_dx)
     convolve_with_kernel_y_dir(u_padded, k, radius, d_dy)
@@ -111,10 +112,12 @@ def sobel_gradient(
 
     Args:
       Static:
-        `s_squared`: square of some scalar, taking values greater than 0.
-        `λ`: contrast parameters, taking values greater than 0.
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) which we want to 
+          differentiate.
+        `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
-      
+        `d*_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of d* `u`, which is
+          updated in place.    
     """
     I_dx = ti.Vector([1, 0], dt=ti.i32)
     I_dy = ti.Vector([0, 1], dt=ti.i32)
@@ -182,21 +185,22 @@ def morphological_switch(
 
     Args:
       Static:
-        `u_padded`: ti.field(dtype=ti.f32, shape=shape_padded) of padded current
-          state, with shape_padded[i] = shape[i] + 2 * `radius`.
+        `u_padded`: ti.field(dtype=ti.f32, shape=[Nx+2*`radius`, Ny+2*`radius`])
+          padded current state.
         `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of first order Gaussian
           derivative kernel.
         `radius`: radius at which kernel `k` is truncated, taking integer values
           greater than 0.
         `dxy`: step size in x and y direction, taking values greater than 0.
-        `u`: ti.field(dtype=ti.f32, shape=shape) of current state.
+        `u`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of current state.
       Mutated:
-        `d_d*`: ti.field(dtype=ti.f32) of first order Gaussian derivatives,
-          which are updated in place.
-        `d_d**`: ti.field(dtype=ti.f32) of second order Gaussian derivatives,
-          which are updated in place.
-        `switch`: ti.field(dtype=ti.f32, shape=shape) of values that determine
-          the degree of dilation or erosion, taking values between -1 and 1.
+        `d_d*`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of first order Gaussian
+          derivatives, which are updated in place.
+        `d_d**`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of second order Gaussian
+          derivatives, which are updated in place.
+        `switch`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of values that
+          determine the degree of dilation or erosion, taking values between -1
+          and 1.
     """
     find_dominant_eigenvector(u_padded, k, radius, d_dx, d_dy, c, s)
     central_derivatives_second_order(u, dxy, d_dxx, d_dxy, d_dyy)
@@ -229,19 +233,19 @@ def find_dominant_eigenvector(
 
     Args:
       Static:
-        `u_padded`: ti.field(dtype=ti.f32, shape=shape_padded) of array of which
-          the dominant eigenvectors are to be found, with
-          shape_padded[i] = shape[i] + 2 * `radius`.
-        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of first order Gaussian
+        `u_padded`: ti.field(dtype=ti.f32, shape=[Nx+2*`radius`, Ny+2*`radius`])
+          padded array of which the dominant eigenvectors of the structure
+          tensor are to be found.
+        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) first order Gaussian
           derivative kernel.
         `radius`: radius at which kernel `k` is truncated, taking integer values
           greater than 0.
       Mutated:
-        `d_d*`: ti.field(dtype=ti.f32) of Gaussian derivatives, which are
-          updated in place.
-        `c`: ti.field(dtype=ti.f32, shape=shape) of first components of the
+        `d_d*`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of Gaussian derivatives,
+          which are updated in place.
+        `c`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of first components of the
           normalised dominant eigenvectors, as in Eq. (15).
-        `s`: ti.field(dtype=ti.f32, shape=shape) of second components of the
+        `s`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of second components of the
           normalised dominant eigenvectors, as in Eq. (15).
     """
     convolve_with_kernel_x_dir(u_padded, k, radius, d_dx)
