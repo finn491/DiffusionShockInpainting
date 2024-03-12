@@ -112,7 +112,7 @@ def morphological(
     """
     @taichi.kernel
 
-    Compute an approximation of the |grad `u`| using axial and diagonal upwind
+    Compute an approximation of the ||grad `u`|| using axial and diagonal upwind
     differences, as found in "Diffusion-Shock Inpainting" (2023) by K.
     Schaefer and J. Weickert, Eq. (12).
 
@@ -122,9 +122,9 @@ def morphological(
           differentiate.
         `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
-        `dilation_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of |grad `u`|,
+        `dilation_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of ||grad `u`||,
           which is updated in place.
-        `erosion_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of -|grad `u`|,
+        `erosion_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of -||grad `u`||,
           which is updated in place.
     """
     δ = ti.math.sqrt(2) - 1 # Good value for rotation invariance according to M. Welk and J. Weickert (2021)

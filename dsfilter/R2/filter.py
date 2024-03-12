@@ -14,7 +14,7 @@ from dsfilter.R2.derivatives import (
 )
 from dsfilter.utils import unpad_array
 
-def DS_filter_R2(u0_np, mask_np, ν, λ, σ, dxy, T):
+def DS_filter_R2(u0_np, mask_np, ν, λ, σ, ρ, dxy, T):
     """
     Apply Diffusion-Shock filtering in R^2.
     """
@@ -22,7 +22,8 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, dxy, T):
     dt = compute_timestep(dxy)
     n = int(T / dt)
     k_DS, radius_DS = gaussian_derivative_kernel(ν, 1)
-    k_morph, radius_morph = gaussian_derivative_kernel(σ, 1)
+    k_morph_int, radius_morph_int = gaussian_derivative_kernel(σ, 1)
+    k_morph_ext, radius_morph_ext = gaussian_derivative_kernel(ρ, 1)
 
     # Initialise TaiChi objects
     ## Padded versions of u to be able to do Gaussian derivative
@@ -37,6 +38,7 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, dxy, T):
 
     u = ti.field(dtype=ti.f32, shape=shape)
     u.from_numpy(u0_np)
+    du_dt = ti.field(dtype=ti.f32, shape=shape)
 
     u_DS = ti.field(dtype=ti.f32, shape=shape)
     u_DS.from_numpy(u0_np)
@@ -45,6 +47,9 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, dxy, T):
     u_morph.from_numpy(u0_np)
 
     ## Gaussian derivatives
+    # shape_ext = (shape[0] + 2 * radius_morph_ext, shape[1] + 2 * radius_morph_ext)
+    # d_dx = ti.field(dtype=ti.f32, shape=shape_ext)
+    # d_dy = ti.field(dtype=ti.f32, shape=shape_ext)
     d_dx = ti.field(dtype=ti.f32, shape=shape)
     d_dy = ti.field(dtype=ti.f32, shape=shape)
     d_dxx = ti.field(dtype=ti.f32, shape=shape)
@@ -52,6 +57,10 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, dxy, T):
     d_dyy = ti.field(dtype=ti.f32, shape=shape)
 
     ## Dominant eigenvector
+    Jρ_padded = ti.field(dtype=ti.f32, shape=shape)
+    Jρ11 = ti.field(dtype=ti.f32, shape=shape)
+    Jρ12 = ti.field(dtype=ti.f32, shape=shape)
+    Jρ22 = ti.field(dtype=ti.f32, shape=shape)
     c = ti.field(dtype=ti.f32, shape=shape)
     s = ti.field(dtype=ti.f32, shape=shape)
 
@@ -65,16 +74,19 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, dxy, T):
     erosion_u = ti.field(dtype=ti.f32, shape=shape)
 
     for _ in tqdm(range(n)):
+        # Compute switches
         DS_switch(u_DS, k_DS, radius_DS, λ, d_dx, d_dy, switch_DS)
-        morphological_switch(u_morph, k_morph, radius_morph, dxy, d_dx, d_dy, c, s, u, d_dxx, d_dxy, d_dyy,
-                             switch_morph)
+        morphological_switch(u_morph, dxy, k_morph_int, radius_morph_int, d_dx, d_dy, k_morph_ext, radius_morph_ext,
+                             Jρ_padded, Jρ11, Jρ12, Jρ22, c, s, u, d_dxx, d_dxy, d_dyy, switch_morph)
+        # Compute derivatives
         laplacian(u, dxy, laplacian_u)
         morphological(u, dxy, dilation_u, erosion_u)
-        step_DS_filter(u, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u)
-        apply_mask(u, u0, mask)
+        # Step
+        step_DS_filter(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
+        # Correct boundary conditions
         fix_reflected_padding(u)
         fix_switch_content(u, radius_DS, u_DS)
-        fix_switch_content(u, radius_morph, u_morph)
+        fix_switch_content(u, radius_morph_int + radius_morph_ext, u_morph)
 
     # Cleanup   
     u_np = u.to_numpy()
@@ -105,12 +117,14 @@ def compute_timestep(dxy, δ=np.sqrt(2)-1):
 @ti.kernel
 def step_DS_filter(
     u: ti.template(),
+    mask: ti.template(),
     dt: ti.f32,
     switch_DS: ti.template(),
     switch_morph: ti.template(),
     laplacian_u: ti.template(),
     dilation_u: ti.template(),
-    erosion_u: ti.template()
+    erosion_u: ti.template(),
+    du_dt: ti.template()
 ):
     """
     @taichi.kernel
@@ -120,21 +134,37 @@ def step_DS_filter(
 
     Args:
       Static:
-        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) which we want to 
-          differentiate.
-        `dxy`: step size in x and y direction, taking values greater than 0.
-      Mutated:
+        `mask`: ti.field(dtype=[float], shape=[Nx, Ny]) inpainting mask.
+        `dt`: step size, taking values greater than 0.
+        `switch_DS`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of values that
+          determine the degree of diffusion or shock, taking values between 0
+          and 1.
+        `switch_morph`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of values that
+          determine the degree of dilation or erosion, taking values between -1
+          and 1.
+        `laplacian_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of laplacian of
+          `u`, which is updated in place.
         `dilation_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of ||grad `u`||,
           which is updated in place.
+        `erosion_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of -||grad `u`||,
+          which is updated in place.
+      Mutated:
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) which we want to evolve
+          with the DS PDE.
+        `du_dt`: ti.field(dtype=[float], shape=[Nx, Ny]) change in `u` in a
+          single time step, not taking into account the mask.
     """
     for I in ti.grouped(u):
-        u[I] += dt * (
+        du_dt[I] = (
             laplacian_u[I] * switch_DS[I] - 
             (1 - switch_DS[I]) * (
-                erosion_u[I] * (switch_morph[I] + 1) / 2  +
+                # Do erosion when switch_morph = 1.
+                erosion_u[I] * (1 + switch_morph[I]) / 2  +
+                # Do dilation when switch_morph = -1.
                 dilation_u[I] * (1 - switch_morph[I]) / 2
             )
         )
+        u[I] += dt * du_dt[I] * (1 - mask[I]) # Only change values in the mask.
         
 
 # Fix padding function
@@ -184,26 +214,3 @@ def fix_switch_content(
     I_shift = ti.Vector([radius - 1, radius - 1], ti.i32)
     for I in ti.grouped(u):
         switch[I + I_shift] = u[I]
-
-@ti.kernel
-def apply_mask(
-    u: ti.template(),
-    u0: ti.template(),
-    mask: ti.template()
-):
-    """
-    @taichi.kernel
-
-    Apply the inpainting mask.
-
-    Args:
-      Static:
-        `u0`: ti.field(dtype=[float], shape=[Nx, Ny]) initial condition used to
-          overwrite outside of the inpainting mask.
-        `mask`: ti.field(dtype=[float], shape=[Nx, Ny]) inpainting mask.
-      Mutated:
-        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) to be reset outside of the
-          inpainting mask.
-    """
-    for I in ti.grouped(u):
-        u[I] = (1 - mask[I]) * u[I] + mask[I] * u0[I]

@@ -64,7 +64,7 @@ def g_field(
     Args:
       Static:
         `field_squared`: ti.field(dtype=ti.f32) square of some scalar field; in 
-          DS filtering the square of |grad Gν * u|, where Gν is the Gaussian 
+          DS filtering the square of ||grad Gν * u||, where Gν is the Gaussian 
           with standard deviation ν.
         `λ`: contrast parameter, taking values greater than 0.
       Mutated:
@@ -164,11 +164,17 @@ def sobel_gradient(
 @ti.kernel
 def morphological_switch(
     u_padded: ti.template(),
-    k: ti.template(),
-    radius: ti.i32,
     dxy: ti.f32,
+    k_int: ti.template(),
+    radius_int: ti.i32,
     d_dx: ti.template(),
     d_dy: ti.template(),
+    k_ext: ti.template(),
+    radius_ext: ti.template(),
+    Jρ_padded: ti.template(),
+    Jρ11: ti.template(),
+    Jρ12: ti.template(),
+    Jρ22: ti.template(),
     c: ti.template(),
     s: ti.template(),
     u: ti.template(),
@@ -187,22 +193,36 @@ def morphological_switch(
       Static:
         `u_padded`: ti.field(dtype=ti.f32, shape=[Nx+2*`radius`, Ny+2*`radius`])
           padded current state.
-        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of first order Gaussian
-          derivative kernel.
-        `radius`: radius at which kernel `k` is truncated, taking integer values
-          greater than 0.
         `dxy`: step size in x and y direction, taking values greater than 0.
+        `k_int`: ti.field(dtype=[float], shape=2*`radius_int`+1) first order
+          Gaussian derivative kernel.
+        `radius_int`: radius at which kernel `k_int` is truncated, taking
+          integer values greater than 0.
+        `k_ext`: ti.field(dtype=[float], shape=2*`radius_ext`+1) first order
+          Gaussian derivative kernel.
+        `radius_ext`: radius at which kernel `k_ext` is truncated, taking
+          integer values greater than 0.
         `u`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of current state.
       Mutated:
         `d_d*`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of first order Gaussian
           derivatives, which are updated in place.
+        `Jρ_padded`: ti.field(dtype=[float], shape=[Nx+2*`radius_ext`, Ny+2*`radius_ext`])
+          padded array to hold intermediate computations for the structure
+          tensor.
+        `Jρ**`: ti.field(dtype=[float], shape=[Nx, Ny]) **-component of the
+          regularised structure tensor.
+        `c`: ti.field(dtype=[float], shape=[Nx, Ny]) first components of the
+          normalised dominant eigenvectors, as in Eq. (15).
+        `s`: ti.field(dtype=[float], shape=[Nx, Ny]) second components of the
+          normalised dominant eigenvectors, as in Eq. (15).
         `d_d**`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of second order Gaussian
           derivatives, which are updated in place.
         `switch`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of values that
           determine the degree of dilation or erosion, taking values between -1
-          and 1.
+          and 1, which is updated in place.
     """
-    find_dominant_eigenvector(u_padded, k, radius, d_dx, d_dy, c, s)
+    find_dominant_eigenvector(u_padded, k_int, radius_int, d_dx, d_dy, k_ext, radius_ext, Jρ_padded, Jρ11, Jρ12, Jρ22,
+                              c, s)
     central_derivatives_second_order(u, dxy, d_dxx, d_dxy, d_dyy)
     for I in ti.grouped(switch):
         switch[I] = ti.math.sign(c[I]**2 * d_dxx[I] + 2 * c[I] * s[I] * d_dxy[I] + s[I]**2 * d_dyy[I])
@@ -220,10 +240,16 @@ def morphological_switch(
 @ti.func
 def find_dominant_eigenvector(
     u_padded: ti.template(),
-    k: ti.template(),
-    radius: ti.i32,
+    k_int: ti.template(),
+    radius_int: ti.i32,
     d_dx: ti.template(),
     d_dy: ti.template(),
+    k_ext: ti.template(),
+    radius_ext: ti.template(),
+    Jρ_padded: ti.template(),
+    Jρ11: ti.template(),
+    Jρ12: ti.template(),
+    Jρ22: ti.template(),
     c: ti.template(),
     s: ti.template()
 ):
@@ -233,35 +259,81 @@ def find_dominant_eigenvector(
 
     Args:
       Static:
-        `u_padded`: ti.field(dtype=ti.f32, shape=[Nx+2*`radius`, Ny+2*`radius`])
-          padded array of which the dominant eigenvectors of the structure
-          tensor are to be found.
-        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) first order Gaussian
-          derivative kernel.
-        `radius`: radius at which kernel `k` is truncated, taking integer values
-          greater than 0.
+        `u_padded`: ti.field(dtype=[float], shape=[Nx+2*radius, Ny+2*radius]),
+          where radius = `radius_int` + `radius_ext`, padded array of which the
+          dominant eigenvectors of the structure tensor are to be found.
+        `k_int`: ti.field(dtype=[float], shape=2*`radius_int`+1) first order
+          Gaussian derivative kernel.
+        `radius_int`: radius at which kernel `k_int` is truncated, taking
+          integer values greater than 0.
+        `k_ext`: ti.field(dtype=[float], shape=2*`radius_ext`+1) first order
+          Gaussian derivative kernel.
+        `radius_ext`: radius at which kernel `k_ext` is truncated, taking
+          integer values greater than 0.
       Mutated:
-        `d_d*`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of Gaussian derivatives,
-          which are updated in place.
-        `c`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of first components of the
+        `d_d*`: ti.field(dtype=[float], shape=[Nx+2*`radius_ext`, Ny+2*`radius_ext`])
+          Gaussian derivatives, which are updated in place.
+        `Jρ_padded`: ti.field(dtype=[float], shape=[Nx+2*`radius_ext`, Ny+2*`radius_ext`])
+          padded array to hold intermediate computations for the structure
+          tensor.
+        `Jρ**`: ti.field(dtype=[float], shape=[Nx, Ny]) **-component of the
+          regularised structure tensor.
+        `c`: ti.field(dtype=[float], shape=[Nx, Ny]) first components of the
           normalised dominant eigenvectors, as in Eq. (15).
-        `s`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of second components of the
+        `s`: ti.field(dtype=[float], shape=[Nx, Ny]) second components of the
           normalised dominant eigenvectors, as in Eq. (15).
     """
-    convolve_with_kernel_x_dir(u_padded, k, radius, d_dx)
-    convolve_with_kernel_y_dir(u_padded, k, radius, d_dy)
+    compute_structure_tensor(u_padded, k_int, radius_int, d_dx, d_dy, k_ext, radius_ext, Jρ_padded, Jρ11, Jρ12, Jρ22)
     for I in ti.grouped(c):
-        # For when we regularise the structure tensor
-        # a11 = Jρ[I][0]
-        # a12 = Jρ[I][1]
-        # a22 = Jρ[I][2]
-        # v1[I] = (a11 - a22 + ti.math.sqrt((a11 - a22)**2 + 4 * a12**2)) / (2 * a12)
-        # norm = ti.math.sqrt(v1[I]**2 + 1)
-        # c[I] = v1[I] / norm
-        # s[I] = 1 / norm
-        norm = ti.math.sqrt(d_dx[I]**2 + d_dy[I]**2)
-        c[I] = d_dx[I] / norm
-        s[I] = d_dy[I] / norm
+        a11 = Jρ11[I]
+        a12 = Jρ12[I]
+        a22 = Jρ22[I]
+        # The dominant eigenvector of a symmetrix 2x2 matrix A with nonnegative
+        # trace A11 + A22, such as the structure tensor, is given by
+        #   (-(-A11 + A22 - sqrt((A11 - A22)**2 + 4 A12**2))/(2 A12), 1).
+        v1 = (a11 - a22 + ti.math.sqrt((a11 - a22)**2 + 4 * a12**2)) / (2 * a12)
+        norm = ti.math.sqrt(v1**2 + 1)
+        c[I] = v1 / norm
+        s[I] = 1 / norm
+
+
+@ti.func
+def compute_structure_tensor(
+    u_padded: ti.template(),
+    k_int: ti.template(),
+    radius_int: ti.i32,
+    d_dx: ti.template(),
+    d_dy: ti.template(),
+    k_ext: ti.template(),
+    radius_ext: ti.i32,
+    Jρ_padded: ti.template(),
+    Jρ11: ti.template(),
+    Jρ12: ti.template(),
+    Jρ22: ti.template()
+):
+    """
+    @taichi.func
+
+    Compute the structure tensor    
+    """
+    # Compute gradient.
+    convolve_with_kernel_x_dir(u_padded, k_int, radius_int + radius_ext, d_dx)
+    convolve_with_kernel_y_dir(u_padded, k_int, radius_int + radius_ext, d_dy)
+    # Compute Jρ_11.
+    for I in ti.grouped(Jρ_padded):
+        Jρ_padded[I] = d_dx[I]**2
+    convolve_with_kernel_x_dir(Jρ_padded, k_ext, radius_ext, Jρ11)
+    convolve_with_kernel_y_dir(Jρ_padded, k_ext, radius_ext, Jρ11)
+    # Compute Jρ_12.
+    for I in ti.grouped(Jρ_padded):
+        Jρ_padded[I] = d_dx[I] * d_dy[I]
+    convolve_with_kernel_x_dir(Jρ_padded, k_ext, radius_ext, Jρ12)
+    convolve_with_kernel_y_dir(Jρ_padded, k_ext, radius_ext, Jρ12)
+    # Compute Jρ_22.
+    for I in ti.grouped(Jρ_padded):
+        Jρ_padded[I] = d_dy[I]**2
+    convolve_with_kernel_x_dir(Jρ_padded, k_ext, radius_ext, Jρ22)
+    convolve_with_kernel_x_dir(Jρ_padded, k_ext, radius_ext, Jρ22)
 
 
 @ti.func
