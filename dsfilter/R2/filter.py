@@ -22,8 +22,8 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, ρ, dxy, T):
     dt = compute_timestep(dxy)
     n = int(T / dt)
     k_DS, radius_DS = gaussian_derivative_kernel(ν, 1)
-    k_morph_int, radius_morph_int = gaussian_derivative_kernel(σ, 1)
-    k_morph_ext, radius_morph_ext = gaussian_derivative_kernel(ρ, 1)
+    k_morph_int, radius_morph_int = gaussian_derivative_kernel(σ, 0)
+    k_morph_ext, radius_morph_ext = gaussian_derivative_kernel(ρ, 0)
 
     # Initialise TaiChi objects
     ## Padded versions of u to be able to do Gaussian derivative
