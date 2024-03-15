@@ -42,7 +42,7 @@ def laplacian(
         # 0 |  1 | 0
         # 1 | -4 | 1
         # 0 |  1 | 0
-        laplacian_u[I] = (1 - δ) / dxy**2 * (
+        laplacian_u[I_unshifted] = (1 - δ) / dxy**2 * (
             -4 * u_padded[I] +
             u_padded[I + I_dx] +
             u_padded[I - I_dx] +
@@ -53,7 +53,7 @@ def laplacian(
         # 1 |  0 | 1
         # 0 | -4 | 0
         # 1 |  0 | 1
-        laplacian_u[I] += δ / (2 * dxy**2) * (
+        laplacian_u[I_unshifted] += δ / (2 * dxy**2) * (
             -4 * u_padded[I] +
             u_padded[I + I_dplus] +
             u_padded[I - I_dplus] +
@@ -93,7 +93,7 @@ def morphological(
     I_dplus = I_dx + I_dy  # Positive diagonal
     I_dminus = I_dx - I_dy # Negative diagonal
     for I_unshifted in ti.grouped(dilation_u):
-        I = I_unshifted + I_shift
+        I = I_unshifted + I_shift # Account for the padding.
 
         d_dx_forward = u[I + I_dx] - u[I]
         d_dx_backward = u[I] - u[I - I_dx]
@@ -106,24 +106,24 @@ def morphological(
 
         # Dilation
         ## Axial
-        dilation_u[I] = (1 - δ) / dxy * (
+        dilation_u[I_unshifted] = (1 - δ) / dxy * ti.math.sqrt(
             select_upwind_derivative_dilation(d_dx_forward, d_dx_backward)**2 +
             select_upwind_derivative_dilation(d_dy_forward, d_dy_backward)**2
         )
         ## Diagonal
-        dilation_u[I] += δ / (ti.math.sqrt(2) * dxy) * (
+        dilation_u[I_unshifted] += δ / (ti.math.sqrt(2) * dxy) * ti.math.sqrt(
             select_upwind_derivative_dilation(d_dplus_forward, d_dplus_backward)**2 +
             select_upwind_derivative_dilation(d_dminus_forward, d_dminus_backward)**2
         )
 
         # Erosion
         ## Axial
-        erosion_u[I] = -(1 - δ) / dxy * (
+        erosion_u[I_unshifted] = -(1 - δ) / dxy * ti.math.sqrt(
             select_upwind_derivative_erosion(d_dx_forward, d_dx_backward)**2 +
             select_upwind_derivative_erosion(d_dy_forward, d_dy_backward)**2
         )
         ## Diagonal
-        erosion_u[I] -= δ / (ti.math.sqrt(2) * dxy) * (
+        erosion_u[I_unshifted] -= δ / (ti.math.sqrt(2) * dxy) * ti.math.sqrt(
             select_upwind_derivative_erosion(d_dplus_forward, d_dplus_backward)**2 +
             select_upwind_derivative_erosion(d_dminus_forward, d_dminus_backward)**2
         )
@@ -214,7 +214,7 @@ def convolve_with_kernel_x_dir(
         y_shifted = y + radius
         s = 0.
         for i in range(2*radius+1):
-            s += u_padded[x + i, y_shifted] * k[2*radius+1-i]
+            s += u_padded[x + i, y_shifted] * k[2*radius-i]
         u_convolved[x, y] = s
 
 @ti.func
@@ -244,7 +244,7 @@ def convolve_with_kernel_y_dir(
         x_shifted = x + radius
         s = 0.
         for i in range(2*radius+1):
-            s+= u_padded[x_shifted, y + i] * k[2*radius+1-i]
+            s+= u_padded[x_shifted, y + i] * k[2*radius-i]
         u_convolved[x, y] = s
 
 def gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):
