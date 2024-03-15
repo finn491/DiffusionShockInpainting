@@ -108,7 +108,9 @@ def morphological_switch(
 
     Args:
       Static:
-        `u_padded`: ti.field(dtype=ti.f32, shape=[Nx+2*`radius`, Ny+2*`radius`])
+        `u_padded_ext`: ti.field(dtype=ti.f32, shape=[Nx+2*(`radius_ext`+`radius_int`), Ny+2*(`radius_ext`+`radius_int`)])
+          padded current state.
+        `u_padded_int`: ti.field(dtype=ti.f32, shape=[Nx+2*`radius_int`, Ny+2*`radius_int`])
           padded current state.
         `dxy`: step size in x and y direction, taking values greater than 0.
         `k_int`: ti.field(dtype=[float], shape=2*`radius_int`+1) Gaussian kernel
@@ -148,7 +150,7 @@ def morphological_switch(
     convolve_with_kernel_x_dir(u_padded_int, k_int, radius_int, switch)
     convolve_with_kernel_y_dir(u_padded_int, k_int, radius_int, switch)
     # Compute second derivatives of u_σ.
-    central_derivatives_second_order(switch, dxy, k_int, radius_int, d_dxx, d_dxy, d_dyy)
+    central_derivatives_second_order(switch, dxy, d_dxx, d_dxy, d_dyy)
     # Compute second derivative of u_σ in the direction of the dominant
     # eigenvector.
     for I in ti.grouped(switch):

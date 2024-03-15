@@ -6,41 +6,6 @@ from dsfilter.utils import (
     select_upwind_derivative_dilation,
     select_upwind_derivative_erosion
 )
-
-# Helper Functions
-
-
-@ti.func
-def normalise_field(
-    field: ti.template(),
-    norm: ti.f32
-):
-    """
-    @ti.func
-
-    Normalise `field` to sum to `norm`.
-
-    Args:
-      Static:
-        `norm`: desired norm for `field`, taking values greater than 0.
-      Mutated:
-        `field`: ti.field that is to be normalised, which is updated in place.    
-    """
-    current_norm = 0.
-    for I in ti.grouped(field):
-        current_norm += field[I]
-    norm_factor = norm / current_norm
-    for I in ti.grouped(field):
-        field[I] *= norm_factor
-
-@ti.func
-def divide_field(
-    field: ti.template(),
-    denom: ti.f32
-):
-    for I in ti.grouped(field):
-        field[I] /= denom
-
 # Actual Derivatives
 
 @ti.kernel
@@ -58,7 +23,7 @@ def laplacian(
 
     Args:
       Static:
-        `u_padded`: ti.field(dtype=[float], shape=[Nx+1, Ny+1]) u padded with
+        `u_padded`: ti.field(dtype=[float], shape=[Nx+2, Ny+2]) u padded with
           reflecting boundaries.
         `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
@@ -112,7 +77,7 @@ def morphological(
 
     Args:
       Static:
-        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) which we want to 
+        `u`: ti.field(dtype=[float], shape=[Nx+2, Ny+2]) which we want to 
           differentiate.
         `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
@@ -122,28 +87,22 @@ def morphological(
           which is updated in place.
     """
     δ = ti.math.sqrt(2) - 1 # Good value for rotation invariance according to M. Welk and J. Weickert (2021)
+    I_shift = ti.Vector([1, 1], dt=ti.i32)
     I_dx = ti.Vector([1, 0], dt=ti.i32)
     I_dy = ti.Vector([0, 1], dt=ti.i32)
     I_dplus = I_dx + I_dy  # Positive diagonal
     I_dminus = I_dx - I_dy # Negative diagonal
-    for I in ti.grouped(u):
-        I_dx_forward = sanitize_index(I + I_dx, u)
-        I_dx_backward = sanitize_index(I - I_dx, u)
-        I_dy_forward = sanitize_index(I + I_dy, u)
-        I_dy_backward = sanitize_index(I - I_dy, u)
-        I_dplus_forward = sanitize_index(I + I_dplus, u)
-        I_dplus_backward = sanitize_index(I - I_dplus, u)
-        I_dminus_forward = sanitize_index(I + I_dminus, u)
-        I_dminus_backward = sanitize_index(I - I_dminus, u)
+    for I_unshifted in ti.grouped(dilation_u):
+        I = I_unshifted + I_shift
 
-        d_dx_forward = (u[I_dx_forward] - u[I])
-        d_dx_backward = (u[I] - u[I_dx_backward])
-        d_dy_forward = (u[I_dy_forward] - u[I])
-        d_dy_backward = (u[I] - u[I_dy_backward])
-        d_dplus_forward = (u[I_dplus_forward] - u[I])
-        d_dplus_backward = (u[I] - u[I_dplus_backward])
-        d_dminus_forward = (u[I_dminus_forward] - u[I])
-        d_dminus_backward = (u[I] - u[I_dminus_backward])
+        d_dx_forward = u[I + I_dx] - u[I]
+        d_dx_backward = u[I] - u[I - I_dx]
+        d_dy_forward = u[I + I_dy] - u[I]
+        d_dy_backward = u[I] - u[I - I_dy]
+        d_dplus_forward = u[I + I_dplus] - u[I]
+        d_dplus_backward = u[I] - u[I - I_dplus]
+        d_dminus_forward = u[I + I_dminus] - u[I]
+        d_dminus_backward = u[I] - u[I - I_dminus]
 
         # Dilation
         ## Axial
@@ -184,7 +143,7 @@ def central_derivatives_second_order(
 
     Args:
       Static:
-        `u`: ti.field(dtype=[float]) which we want to 
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) which we want to 
           differentiate.
         `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
@@ -378,3 +337,37 @@ def gaussian_derivative_kernel_order_1(
         moment += x * val
         k[i] = val
     divide_field(k, -moment * dxy)
+
+
+# Helper Functions
+
+@ti.func
+def normalise_field(
+    field: ti.template(),
+    norm: ti.f32
+):
+    """
+    @ti.func
+
+    Normalise `field` to sum to `norm`.
+
+    Args:
+      Static:
+        `norm`: desired norm for `field`, taking values greater than 0.
+      Mutated:
+        `field`: ti.field that is to be normalised, which is updated in place.    
+    """
+    current_norm = 0.
+    for I in ti.grouped(field):
+        current_norm += field[I]
+    norm_factor = norm / current_norm
+    for I in ti.grouped(field):
+        field[I] *= norm_factor
+
+@ti.func
+def divide_field(
+    field: ti.template(),
+    denom: ti.f32
+):
+    for I in ti.grouped(field):
+        field[I] /= denom

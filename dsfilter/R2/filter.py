@@ -21,7 +21,7 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, ρ, dxy, T):
     # Set hyperparameters
     dt = compute_timestep(dxy)
     n = int(T / dt)
-    k_DS, radius_DS = gaussian_derivative_kernel(ν, 1)
+    k_DS, radius_DS = gaussian_derivative_kernel(ν, 0)
     k_morph_int, radius_morph_int = gaussian_derivative_kernel(σ, 0)
     k_morph_ext, radius_morph_ext = gaussian_derivative_kernel(ρ, 0)
 
@@ -36,15 +36,24 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, ρ, dxy, T):
     mask = ti.field(dtype=ti.f32, shape=shape)
     mask.from_numpy(mask_np)
 
-    u = ti.field(dtype=ti.f32, shape=shape)
-    u.from_numpy(u0_np)
+    shape_padded = tuple(s + 2 for s in shape)
+    u = ti.field(dtype=ti.f32, shape=shape_padded)
+    fill_padded_u(u0, 2, u)
     du_dt = ti.field(dtype=ti.f32, shape=shape)
 
-    u_DS = ti.field(dtype=ti.f32, shape=shape)
-    u_DS.from_numpy(u0_np)
+    shape_DS = tuple(s + 2 * radius_DS for s in shape)
+    u_DS = ti.field(dtype=ti.f32, shape=shape_DS)
+    fill_padded_u(u, radius_DS, u_DS)
 
-    u_morph = ti.field(dtype=ti.f32, shape=shape)
-    u_morph.from_numpy(u0_np)
+    shape_morph_ext = tuple(s + 2 * (radius_morph_ext + radius_morph_int) for s in shape)
+    u_morph_ext = ti.field(dtype=ti.f32, shape=shape_morph_ext)
+    fill_padded_u(u, radius_morph_ext + radius_morph_int, u_morph_ext)
+    shape_morph_σ_ext = tuple(s + 2 * radius_morph_ext for s in shape)
+    u_morph_σ_ext = ti.field(dtype=ti.f32, shape=shape_morph_σ_ext)
+    fill_padded_u(u, radius_morph_ext, u_morph_σ_ext)
+    shape_morph_int = tuple(s + 2 * radius_morph_int for s in shape)
+    u_morph_int = ti.field(dtype=ti.f32, shape=shape_morph_int)
+    fill_padded_u(u, radius_morph_int, u_morph_int)
 
     ## Gaussian derivatives
     # shape_ext = (shape[0] + 2 * radius_morph_ext, shape[1] + 2 * radius_morph_ext)
@@ -57,7 +66,7 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, ρ, dxy, T):
     d_dyy = ti.field(dtype=ti.f32, shape=shape)
 
     ## Dominant eigenvector
-    Jρ_padded = ti.field(dtype=ti.f32, shape=shape)
+    Jρ_padded = ti.field(dtype=ti.f32, shape=shape_morph_σ_ext)
     Jρ11 = ti.field(dtype=ti.f32, shape=shape)
     Jρ12 = ti.field(dtype=ti.f32, shape=shape)
     Jρ22 = ti.field(dtype=ti.f32, shape=shape)
@@ -75,19 +84,23 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, ρ, dxy, T):
 
     for _ in tqdm(range(n)):
         # Compute switches
-        DS_switch(u_DS, k_DS, radius_DS, λ, d_dx, d_dy, switch_DS)
-        morphological_switch(u_morph, dxy, k_morph_int, radius_morph_int, d_dx, d_dy, k_morph_ext, radius_morph_ext,
-                             Jρ_padded, Jρ11, Jρ12, Jρ22, c, s, u, d_dxx, d_dxy, d_dyy, switch_morph)
+        DS_switch(u_DS, dxy, k_DS, radius_DS, λ, d_dx, d_dy, switch_DS)
+        morphological_switch(u_morph_ext, u_morph_σ_ext, u_morph_int, dxy, k_morph_int, radius_morph_int, d_dx, d_dy,
+                             k_morph_ext, radius_morph_ext, Jρ_padded, Jρ11, Jρ12, Jρ22, c, s, d_dxx, d_dxy, d_dyy,
+                             switch_morph)
         # Compute derivatives
         laplacian(u, dxy, laplacian_u)
         morphological(u, dxy, dilation_u, erosion_u)
         # Step
         step_DS_filter(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
         # Correct boundary conditions
-        fix_reflected_padding(u)
-        fix_switch_content(u, radius_DS, u_DS)
-        fix_switch_content(u, radius_morph_int + radius_morph_ext, u_morph)
-
+        fix_reflected_padding(u, 1)
+        fill_padded_u(u, radius_morph_ext + radius_morph_int, u_morph_ext)
+        fix_reflected_padding(u_morph_ext, radius_morph_ext + radius_morph_int)
+        fill_padded_u(u, radius_morph_ext, u_morph_σ_ext)
+        fix_reflected_padding(u_morph_σ_ext, radius_morph_ext)
+        fill_padded_u(u, radius_morph_int, u_morph_int)
+        fill_padded_u(u, radius_morph_int, u_morph_int)
     # Cleanup   
     u_np = u.to_numpy()
     return unpad_array(u_np, pad_shape=1)
@@ -171,7 +184,8 @@ def step_DS_filter(
         
 @ti.kernel
 def fix_reflected_padding(
-    u: ti.template()
+    u: ti.template(),
+    radius: ti.i32
 ):
     """
     @taichi.kernel
@@ -180,22 +194,24 @@ def fix_reflected_padding(
     
     Args:
       Mutated:
-        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) to be repadded, updated in
-          place.
+        `u`: ti.field(dtype=[float], shape=[Nx+2*`radius`, Ny+2*`radius`]) to be
+          repadded, updated in place.
     """
     I, J = u.shape
     for i in range(I):
-        u[i, 0] = u[i, 2]
-        u[i, J-1] = u[i, J-3]
+        for k in range(radius):
+            u[i, k] = u[i, 2 * radius - k]
+            u[i, J-1 - k] = u[i, J-1 - 2 * radius + k]
     for j in range(J):
-        u[0, j] = u[2, j]
-        u[I-1, j] = u[I-3, j]
+        for k in range(radius):
+            u[k, j] = u[2 * radius - k, j]
+            u[I-1 - k, j] = u[I-1 - 2 * radius + k, j]
 
 @ti.kernel
-def fix_switch_content(
+def fill_padded_u(
     u: ti.template(),
     radius: ti.i32,
-    switch: ti.template()
+    padded_u: ti.template()
 ):
     """
     @taichi.kernel
@@ -204,13 +220,14 @@ def fix_switch_content(
 
     Args:
       Static:
-        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) content to fill the switch.
+        `u`: ti.field(dtype=[float], shape=[Nx+2, Ny+2]) content to fill
+          `padded_u`.
         `radius`: radius of the Gaussian filter used in the switch, taking
           integer values greater than 0.
       Mutated:
-        `switch`: ti.field(dtype=[float], shape=[Nx, Ny]) switch, updated in
-          place.
+        `padded_u`: ti.field(dtype=[float], shape=[Nx+2*`radius`, Ny+2*`radius`])
+          switch, updated in place.
     """
     I_shift = ti.Vector([radius - 1, radius - 1], ti.i32)
     for I in ti.grouped(u):
-        switch[I + I_shift] = u[I]
+        padded_u[I + I_shift] = u[I]
