@@ -78,6 +78,9 @@ def g_scalar(
 ## Switcher
 
 
+use_external_regularisation = True
+
+if not use_external_regularisation:
 # !!!NO EXTERNAL REGULARISATION!!!
 # Using that grad u is the dominant eigenvector of grad u grad u^T. We would 
 # like to work with a regularised version of the structure tensor, namely
@@ -86,16 +89,13 @@ def g_scalar(
 # power method: take some random u0, and compute Jρ^n u0 for some large n. As 
 # long as u0 is not fully in the span of the small eigenvector, the resulting
 # vector will almost be in the span of the dominant eigenvector.
-
-use_external_regularisation = True
-
-if not use_external_regularisation:
     @ti.kernel
     def morphological_switch(
         u_structure_tensor: ti.template(),
         u_σ_structure_tensor: ti.template(),
         u_dominant_derivative: ti.template(),
         dxy: ti.f32,
+        ε: ti.f32,
         k_int: ti.template(),
         radius_int: ti.i32,
         d_dx: ti.template(),
@@ -124,6 +124,8 @@ if not use_external_regularisation:
             `u_dominant_derivative`: ti.field(dtype=ti.f32, shape=[Nx+2*`radius_int`, Ny+2*`radius_int`])
               padded current state.
             `dxy`: step size in x and y direction, taking values greater than 0.
+            `ε`: regularisation parameter for the signum function used to switch
+              between dilation and erosion, taking values greater than 0.
             `k_int`: ti.field(dtype=[float], shape=2*`radius_int`+1) Gaussian kernel
               with standard deviation σ.
             `radius_int`: radius at which kernel `k_int` is truncated, taking
@@ -161,11 +163,12 @@ if not use_external_regularisation:
         for I in ti.grouped(switch):
             c = d_dx[I]
             s = d_dy[I]
-            norm = ti.math.sqrt(c**2 + s**2)
+            norm = ti.math.sqrt(c**2 + s**2) + 10**-8
             c /= norm
             s /= norm
 
-            switch[I] = ti.math.sign(c**2 * d_dxx[I] + 2 * c * s * d_dxy[I] + s**2 * d_dyy[I])
+            d_dww = c**2 * d_dxx[I] + 2 * c * s * d_dxy[I] + s**2 * d_dyy[I]
+            switch[I] = (ε > 0.) * S_ε_scalar(d_dww, ε) + (ε == 0.) * ti.math.sign(d_dww)
 else:
     @ti.kernel
     def morphological_switch(
@@ -173,6 +176,7 @@ else:
         u_σ_structure_tensor: ti.template(),
         u_dominant_derivative: ti.template(),
         dxy: ti.f32,
+        ε: ti.f32,
         k_int: ti.template(),
         radius_int: ti.i32,
         d_dx: ti.template(),
@@ -201,6 +205,8 @@ else:
             `u_dominant_derivative`: ti.field(dtype=ti.f32, shape=[Nx+2*`radius_int`, Ny+2*`radius_int`])
               padded current state.
             `dxy`: step size in x and y direction, taking values greater than 0.
+            `ε`: regularisation parameter for the signum function used to switch
+              between dilation and erosion, taking values greater than 0.
             `k_int`: ti.field(dtype=[float], shape=2*`radius_int`+1) Gaussian kernel
               with standard deviation σ.
             `radius_int`: radius at which kernel `k_int` is truncated, taking
@@ -242,13 +248,15 @@ else:
             A22 = Jρ22[I]
             # The dominant eigenvector of a symmetrix 2x2 matrix A with nonnegative
             # trace A11 + A22, such as the structure tensor, is given by
-            #   (-(-A11 + A22 - sqrt((A11 - A22)**2 + 4 A12**2))/(2 A12), 1).
-            v1 = -(-A11 + A22 - ti.math.sqrt((A11 - A22)**2 + 4 * A12**2)) / (2 * A12)
-            norm = ti.math.sqrt(v1**2 + 1)
-            c = v1 / norm
-            s = 1 / norm
+            #   (-(-A11 + A22 - sqrt((A11 - A22)**2 + 4 A12**2)), 2 A12).
+            v1 = -(-A11 + A22 - ti.math.sqrt((A11 - A22)**2 + 4 * A12**2))
+            norm = ti.math.sqrt(v1**2 + (2 * A12)**2) + 10**-8
 
-            switch[I] = ti.math.sign(c**2 * d_dxx[I] + 2 * c * s * d_dxy[I] + s**2 * d_dyy[I])
+            c = v1 / norm
+            s = 2 * A12 / norm
+
+            d_dww = c**2 * d_dxx[I] + 2 * c * s * d_dxy[I] + s**2 * d_dyy[I]
+            switch[I] = (ε > 0.) * S_ε_scalar(d_dww, ε) + (ε == 0.) * ti.math.sign(d_dww)
 
     @ti.func
     def compute_structure_tensor(
@@ -358,7 +366,7 @@ def S_ε_scalar(
     Returns:
         ti.f32 of S`ε`(`x`).
     """
-    return (2 / ti.math.pi) * ti.math.atan(x, ε)
+    return (2 / ti.math.pi) * ti.math.atan2(x, ε)
 
 # Derivatives
 

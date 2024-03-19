@@ -14,13 +14,40 @@ from dsfilter.R2.derivatives import (
 )
 from dsfilter.utils import unpad_array
 
-def DS_filter_R2(u0_np, mask_np, ν, λ, σ, ρ, dxy, T):
+def DS_filter_R2(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
     """
-    Apply Diffusion-Shock filtering in R^2.
+    Perform Diffusion-Shock inpainting in R^2, according to Schaefer and
+    Weickert "Diffusion-Shock Inpainting" (2023).
+
+    Args:
+        `u0_np`: np.ndarray initial condition, with shape [Nx, Ny].
+        `mask_np`: np.ndarray inpainting mask, with shape [Nx, Ny], taking
+          values 0 and 1. Wherever the value is 1, no inpainting happens.
+        `T`: time that image is evolved under the DS PDE.
+        `σ`: standard deviation of the internal regularisation of the structure
+          tensor, used for determining whether to perform dilation or erosion.
+        `ρ`: standard deviation of the external regularisation of the structure
+          tensor, used for determining whether to perform dilation or erosion.
+        `ν`: standard deviation of the regularisation when taking the gradient
+          to determine to what degree there is local orientation.
+        `λ`: contrast parameter used to determine whether to perform diffusion
+          or shock based on the degree of local orientation.
+        
+      Optional:
+        `ε`: regularisation parameter for the signum function used to switch
+          between dilation and erosion.
+        `dxy`: size of pixels in the x- and y-directions. Defaults to 1.
+
+    Returns:
+        np.ndarray solution to the DS PDE with initial condition `u0_np` at
+        time `T`.
+        TEMP: np.ndarray switch between diffusion and shock, and np.ndarray
+        switch between dilation and erosion.
     """
     # Set hyperparameters
     dt = compute_timestep(dxy)
     n = int(T / dt)
+    # We reuse the Gaussian kernels
     k_DS, radius_DS = gaussian_derivative_kernel(ν, 0)
     k_morph_int, radius_morph_int = gaussian_derivative_kernel(σ, 0)
     k_morph_ext, radius_morph_ext = gaussian_derivative_kernel(ρ, 0)
@@ -70,7 +97,7 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, ρ, dxy, T):
     for _ in tqdm(range(n)):
         # Compute switches
         DS_switch(u_DS, dxy, k_DS, radius_DS, λ, d_dx_DS, d_dy_DS, switch_DS)
-        morphological_switch(u_structure_tensor, u_σ_structure_tensor, u_dominant_derivative, dxy, k_morph_int,
+        morphological_switch(u_structure_tensor, u_σ_structure_tensor, u_dominant_derivative, dxy, ε, k_morph_int,
                              radius_morph_int, d_dx_morph, d_dy_morph, k_morph_ext, radius_morph_ext, Jρ_padded, Jρ11,
                              Jρ12, Jρ22, d_dxx, d_dxy, d_dyy, switch_morph)
         # Compute derivatives
@@ -90,9 +117,7 @@ def DS_filter_R2(u0_np, mask_np, ν, λ, σ, ρ, dxy, T):
         fix_reflected_padding(u_structure_tensor, radius_morph_ext + radius_morph_int)
         fill_padded_u(u, radius_morph_int, u_dominant_derivative)
         fix_reflected_padding(u_dominant_derivative, radius_morph_ext)
-    # Cleanup   
-    u_np = u.to_numpy()
-    return unpad_array(u_np, pad_shape=1), switch_DS.to_numpy(), switch_morph.to_numpy()
+    return unpad_array(u.to_numpy(), pad_shape=1), switch_DS.to_numpy(), switch_morph.to_numpy()
 
 def compute_timestep(dxy, δ=np.sqrt(2)-1):
     """
@@ -113,7 +138,7 @@ def compute_timestep(dxy, δ=np.sqrt(2)-1):
     """
     τ_D = dxy**2 / (4 - 2 * δ)
     τ_M = dxy / (np.sqrt(2) * (1 - δ) + δ)
-    return min(τ_D, τ_M) / 2
+    return min(τ_D, τ_M) #/ 2
 
 
 @ti.kernel
@@ -162,9 +187,9 @@ def step_DS_filter(
             laplacian_u[I] * switch_DS[I] +
             (1 - switch_DS[I]) * (
                 # Do erosion when switch_morph = 1.
-                erosion_u[I] * (1 + switch_morph[I]) / 2  +
+                erosion_u[I] * (switch_morph[I] > 0.) * ti.abs(switch_morph[I])  +
                 # Do dilation when switch_morph = -1.
-                dilation_u[I] * (1 - switch_morph[I]) / 2
+                dilation_u[I] * (switch_morph[I] < 0.) * ti.abs(switch_morph[I])
             )
         )
         u[I + I_shift] += dt * du_dt[I] * (1 - mask[I]) # Only change values in the mask.
