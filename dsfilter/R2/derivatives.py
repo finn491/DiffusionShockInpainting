@@ -211,7 +211,7 @@ def convolve_with_kernel_x_dir(
           `u_padded` with `k`.
     """
     for x, y in u_convolved:
-        y_shifted = y + radius
+        y_shifted = y
         s = 0.
         for i in range(2*radius+1):
             s += u_padded[x + i, y_shifted] * k[2*radius-i]
@@ -241,7 +241,7 @@ def convolve_with_kernel_y_dir(
           `u_padded` with `k`.
     """
     for x, y in u_convolved:
-        x_shifted = x + radius
+        x_shifted = x
         s = 0.
         for i in range(2*radius+1):
             s+= u_padded[x_shifted, y + i] * k[2*radius-i]

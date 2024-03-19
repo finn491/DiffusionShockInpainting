@@ -15,6 +15,7 @@ from dsfilter.R2.utils import sanitize_index
 @ti.kernel
 def DS_switch(
     u_padded: ti.template(),
+    u_padded_semi: ti.template(),
     dxy: ti.f32,
     k: ti.template(),
     radius: ti.i32,
@@ -33,6 +34,8 @@ def DS_switch(
       Static:
         `u_padded`: ti.field(dtype=ti.f32, shape=[Nx+2*`radius`, Ny+2*`radius`])
           array to be convolved.
+        `u_padded_semi`: ti.field(dtype=ti.f32, shape=[Nx, Ny+2*`radius`])
+          array to store intermediate result after convolving along x.
         `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) Gaussian kernel.
         `radius`: radius at which kernel `k` is truncated, taking integer values
           greater than 0.
@@ -45,8 +48,8 @@ def DS_switch(
           and 1, which is updated in place.
     """
     # First regularise with Gaussian convolution.
-    convolve_with_kernel_x_dir(u_padded, k, radius, switch)
-    convolve_with_kernel_y_dir(u_padded, k, radius, switch)
+    convolve_with_kernel_x_dir(u_padded, k, radius, u_padded_semi)
+    convolve_with_kernel_y_dir(u_padded_semi, k, radius, switch)
     # Then compute gradient with Sobel operators.
     sobel_gradient(switch, dxy, d_dx, d_dy)
     for I in ti.grouped(switch):
@@ -92,8 +95,10 @@ if not use_external_regularisation:
     @ti.kernel
     def morphological_switch(
         u_structure_tensor: ti.template(),
+        u_structure_tensor_semi: ti.template(),
         u_σ_structure_tensor: ti.template(),
         u_dominant_derivative: ti.template(),
+        u_dominant_derivative_semi: ti.template(),
         dxy: ti.f32,
         ε: ti.f32,
         k_int: ti.template(),
@@ -103,6 +108,7 @@ if not use_external_regularisation:
         k_ext: ti.template(),
         radius_ext: ti.template(),
         Jρ_padded: ti.template(),
+        Jρ_padded_semi: ti.template(),
         Jρ11: ti.template(),
         Jρ12: ti.template(),
         Jρ22: ti.template(),
@@ -138,11 +144,18 @@ if not use_external_regularisation:
           Mutated:
             `u_σ_structure_tensor`: ti.field(dtype=[float], shape=[Nx+2*`radius_ext`, Ny+2*`radius_ext`])
               padded u convolved with Gaussian with standard deviation σ.
+            `u_structure_tensor_semi`: ti.field(dtype=ti.f32, shape=[Nx+2*`radius_int`, Ny+2*(`radius_ext`+`radius_int`)])
+              array to store intermediate result after convolving along x.
+            `u_dominant_derivative_semi`: ti.field(dtype=ti.f32, shape=[Nx, Ny+2*`radius_int`])
+              array to store intermediate result after convolving along x.
             `d_d*`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of first order Gaussian
               derivatives, which are updated in place.
             `Jρ_padded`: ti.field(dtype=[float], shape=[Nx+2*`radius_ext`, Ny+2*`radius_ext`])
               padded array to hold intermediate computations for the structure
               tensor.
+            `Jρ_padded_semi`: ti.field(dtype=[float], shape=[Nx, Ny+2*`radius_ext`])
+              padded array to hold intermediate computations for the structure
+              tensor after convolving along x.
             `Jρ**`: ti.field(dtype=[float], shape=[Nx, Ny]) **-component of the
               regularised structure tensor.
             `d_d**`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of second order Gaussian
@@ -153,8 +166,8 @@ if not use_external_regularisation:
         """
         # Regularise with same Gaussian kernel as when computing gradient for
         # structure tensor.
-        convolve_with_kernel_x_dir(u_dominant_derivative, k_int, radius_int, switch)
-        convolve_with_kernel_y_dir(u_dominant_derivative, k_int, radius_int, switch)
+        convolve_with_kernel_x_dir(u_dominant_derivative, k_int, radius_int, u_dominant_derivative_semi)
+        convolve_with_kernel_y_dir(u_dominant_derivative_semi, k_int, radius_int, switch)
         # Compute second derivatives of u_σ.
         sobel_gradient(switch, dxy, d_dx, d_dy)
         central_derivatives_second_order(switch, dxy, d_dxx, d_dxy, d_dyy)
@@ -173,8 +186,10 @@ else:
     @ti.kernel
     def morphological_switch(
         u_structure_tensor: ti.template(),
+        u_structure_tensor_semi: ti.template(),
         u_σ_structure_tensor: ti.template(),
         u_dominant_derivative: ti.template(),
+        u_dominant_derivative_semi: ti.template(),
         dxy: ti.f32,
         ε: ti.f32,
         k_int: ti.template(),
@@ -184,6 +199,7 @@ else:
         k_ext: ti.template(),
         radius_ext: ti.template(),
         Jρ_padded: ti.template(),
+        Jρ_padded_semi: ti.template(),
         Jρ11: ti.template(),
         Jρ12: ti.template(),
         Jρ22: ti.template(),
@@ -219,11 +235,18 @@ else:
           Mutated:
             `u_σ_structure_tensor`: ti.field(dtype=[float], shape=[Nx+2*`radius_ext`, Ny+2*`radius_ext`])
               padded u convolved with Gaussian with standard deviation σ.
+            `u_structure_tensor_semi`: ti.field(dtype=ti.f32, shape=[Nx+2*`radius_int`, Ny+2*(`radius_ext`+`radius_int`)])
+              array to store intermediate result after convolving along x.
+            `u_dominant_derivative_semi`: ti.field(dtype=ti.f32, shape=[Nx, Ny+2*`radius_int`])
+              array to store intermediate result after convolving along x.
             `d_d*`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of first order Gaussian
               derivatives, which are updated in place.
             `Jρ_padded`: ti.field(dtype=[float], shape=[Nx+2*`radius_ext`, Ny+2*`radius_ext`])
               padded array to hold intermediate computations for the structure
               tensor.
+            `Jρ_padded_semi`: ti.field(dtype=[float], shape=[Nx, Ny+2*`radius_ext`])
+              padded array to hold intermediate computations for the structure
+              tensor after convolving along x.
             `Jρ**`: ti.field(dtype=[float], shape=[Nx, Ny]) **-component of the
               regularised structure tensor.
             `d_d**`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of second order Gaussian
@@ -232,12 +255,12 @@ else:
               determine the degree of dilation or erosion, taking values between -1
               and 1, which is updated in place.
         """
-        compute_structure_tensor(u_structure_tensor, u_σ_structure_tensor, dxy, k_int, radius_int, d_dx, d_dy, k_ext,
-                                 radius_ext, Jρ_padded, Jρ11, Jρ12, Jρ22)
+        compute_structure_tensor(u_structure_tensor, u_structure_tensor_semi, u_σ_structure_tensor, dxy, k_int,
+                                 radius_int, d_dx, d_dy, k_ext, radius_ext, Jρ_padded, Jρ_padded_semi, Jρ11, Jρ12, Jρ22)
         # Regularise with same Gaussian kernel as when computing gradient for
         # structure tensor.
-        convolve_with_kernel_x_dir(u_dominant_derivative, k_int, radius_int, switch)
-        convolve_with_kernel_y_dir(u_dominant_derivative, k_int, radius_int, switch)
+        convolve_with_kernel_x_dir(u_dominant_derivative, k_int, radius_int, u_dominant_derivative_semi)
+        convolve_with_kernel_y_dir(u_dominant_derivative_semi, k_int, radius_int, switch)
         # Compute second derivatives of u_σ.
         central_derivatives_second_order(switch, dxy, d_dxx, d_dxy, d_dyy)
         # Compute second derivative of u_σ in the direction of the dominant
@@ -261,6 +284,7 @@ else:
     @ti.func
     def compute_structure_tensor(
         u_structure_tensor: ti.template(),
+        u_structure_tensor_semi: ti.template(),
         u_σ_structure_tensor: ti.template(),
         dxy: ti.f32,
         k_int: ti.template(),
@@ -270,6 +294,7 @@ else:
         k_ext: ti.template(),
         radius_ext: ti.i32,
         Jρ_padded: ti.template(),
+        Jρ_padded_semi: ti.template(),
         Jρ11: ti.template(),
         Jρ12: ti.template(),
         Jρ22: ti.template()
@@ -304,25 +329,25 @@ else:
               regularised structure tensor.
         """
         # First regularise with Gaussian convolution.
-        convolve_with_kernel_x_dir(u_structure_tensor, k_int, radius_int, u_σ_structure_tensor)
-        convolve_with_kernel_y_dir(u_structure_tensor, k_int, radius_int, u_σ_structure_tensor)
+        convolve_with_kernel_x_dir(u_structure_tensor, k_int, radius_int, u_structure_tensor_semi)
+        convolve_with_kernel_y_dir(u_structure_tensor_semi, k_int, radius_int, u_σ_structure_tensor)
         # Then compute gradient with Sobel operators.
         sobel_gradient(u_σ_structure_tensor, dxy, d_dx, d_dy)
         # Compute Jρ_11.
         for I in ti.grouped(Jρ_padded):
             Jρ_padded[I] = d_dx[I]**2
-        convolve_with_kernel_x_dir(Jρ_padded, k_ext, radius_ext, Jρ11)
-        convolve_with_kernel_y_dir(Jρ_padded, k_ext, radius_ext, Jρ11)
+        convolve_with_kernel_x_dir(Jρ_padded, k_ext, radius_ext, Jρ_padded_semi)
+        convolve_with_kernel_y_dir(Jρ_padded_semi, k_ext, radius_ext, Jρ11)
         # Compute Jρ_12.
         for I in ti.grouped(Jρ_padded):
             Jρ_padded[I] = d_dx[I] * d_dy[I]
-        convolve_with_kernel_x_dir(Jρ_padded, k_ext, radius_ext, Jρ12)
-        convolve_with_kernel_y_dir(Jρ_padded, k_ext, radius_ext, Jρ12)
+        convolve_with_kernel_x_dir(Jρ_padded, k_ext, radius_ext, Jρ_padded_semi)
+        convolve_with_kernel_y_dir(Jρ_padded_semi, k_ext, radius_ext, Jρ12)
         # Compute Jρ_22.
         for I in ti.grouped(Jρ_padded):
             Jρ_padded[I] = d_dy[I]**2
-        convolve_with_kernel_x_dir(Jρ_padded, k_ext, radius_ext, Jρ22)
-        convolve_with_kernel_y_dir(Jρ_padded, k_ext, radius_ext, Jρ22)
+        convolve_with_kernel_x_dir(Jρ_padded, k_ext, radius_ext, Jρ_padded_semi)
+        convolve_with_kernel_y_dir(Jρ_padded_semi, k_ext, radius_ext, Jρ22)
 
 
 @ti.func

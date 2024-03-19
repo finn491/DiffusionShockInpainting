@@ -73,6 +73,7 @@ def DS_filter_R2(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
     ### DS switch
     u_DS = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_DS, Ny + 2 * radius_DS))
     fill_padded_u(u, radius_DS, u_DS)
+    u_DS_semi = ti.field(dtype=ti.f32, shape=(Nx, Ny + 2 * radius_DS))
     d_dx_DS = ti.field(dtype=ti.f32, shape=(Nx, Ny))
     d_dy_DS = ti.field(dtype=ti.f32, shape=(Nx, Ny))
     switch_DS = ti.field(dtype=ti.f32, shape=(Nx, Ny))
@@ -80,15 +81,18 @@ def DS_filter_R2(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
     u_structure_tensor = ti.field(dtype=ti.f32, shape=(Nx + 2 * (radius_morph_int + radius_morph_ext),
                                                        Ny + 2 * (radius_morph_int + radius_morph_ext)))
     fill_padded_u(u, radius_morph_ext + radius_morph_int, u_structure_tensor)
+    u_structure_tensor_semi = ti.field(dtype=ti.f32, shape=(Nx, Ny + 2 * (radius_morph_int + radius_morph_ext)))
     u_σ_structure_tensor = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_ext, Ny + 2 * radius_morph_ext))
     d_dx_morph = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_ext, Ny + 2 * radius_morph_ext))
     d_dy_morph = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_ext, Ny + 2 * radius_morph_ext))
     Jρ_padded = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_ext, Ny + 2 * radius_morph_ext))
+    Jρ_padded_semi = ti.field(dtype=ti.f32, shape=(Nx, Ny + 2 * radius_morph_ext))
     Jρ11 = ti.field(dtype=ti.f32, shape=(Nx, Ny))
     Jρ12 = ti.field(dtype=ti.f32, shape=(Nx, Ny))
     Jρ22 = ti.field(dtype=ti.f32, shape=(Nx, Ny))
     u_dominant_derivative = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_int, Ny + 2 * radius_morph_int))
     fill_padded_u(u, radius_morph_int, u_dominant_derivative)
+    u_dominant_derivative_semi = ti.field(dtype=ti.f32, shape=(Nx, Ny + 2 * radius_morph_int))
     d_dxx = ti.field(dtype=ti.f32, shape=(Nx, Ny))
     d_dxy = ti.field(dtype=ti.f32, shape=(Nx, Ny))
     d_dyy = ti.field(dtype=ti.f32, shape=(Nx, Ny))
@@ -96,10 +100,11 @@ def DS_filter_R2(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
 
     for _ in tqdm(range(n)):
         # Compute switches
-        DS_switch(u_DS, dxy, k_DS, radius_DS, λ, d_dx_DS, d_dy_DS, switch_DS)
-        morphological_switch(u_structure_tensor, u_σ_structure_tensor, u_dominant_derivative, dxy, ε, k_morph_int,
-                             radius_morph_int, d_dx_morph, d_dy_morph, k_morph_ext, radius_morph_ext, Jρ_padded, Jρ11,
-                             Jρ12, Jρ22, d_dxx, d_dxy, d_dyy, switch_morph)
+        DS_switch(u_DS, u_DS_semi, dxy, k_DS, radius_DS, λ, d_dx_DS, d_dy_DS, switch_DS)
+        morphological_switch(u_structure_tensor, u_structure_tensor_semi, u_σ_structure_tensor, u_dominant_derivative,
+                             u_dominant_derivative_semi, dxy, ε, k_morph_int, radius_morph_int, d_dx_morph, d_dy_morph,
+                             k_morph_ext, radius_morph_ext, Jρ_padded, Jρ_padded_semi, Jρ11, Jρ12, Jρ22, d_dxx, d_dxy,
+                             d_dyy, switch_morph)
         # Compute derivatives
         laplacian(u, dxy, laplacian_u)
         morphological(u, dxy, dilation_u, erosion_u)
