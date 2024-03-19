@@ -233,7 +233,7 @@ else:
               and 1, which is updated in place.
         """
         compute_structure_tensor(u_structure_tensor, u_σ_structure_tensor, dxy, k_int, radius_int, d_dx, d_dy, k_ext,
-                                radius_ext, Jρ_padded, Jρ11, Jρ12, Jρ22)
+                                 radius_ext, Jρ_padded, Jρ11, Jρ12, Jρ22)
         # Regularise with same Gaussian kernel as when computing gradient for
         # structure tensor.
         convolve_with_kernel_x_dir(u_dominant_derivative, k_int, radius_int, switch)
@@ -322,7 +322,7 @@ else:
         for I in ti.grouped(Jρ_padded):
             Jρ_padded[I] = d_dy[I]**2
         convolve_with_kernel_x_dir(Jρ_padded, k_ext, radius_ext, Jρ22)
-        convolve_with_kernel_x_dir(Jρ_padded, k_ext, radius_ext, Jρ22)
+        convolve_with_kernel_y_dir(Jρ_padded, k_ext, radius_ext, Jρ22)
 
 
 @ti.func
