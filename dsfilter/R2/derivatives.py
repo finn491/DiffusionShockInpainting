@@ -211,10 +211,9 @@ def convolve_with_kernel_x_dir(
           `u_padded` with `k`.
     """
     for x, y in u_convolved:
-        y_shifted = y
         s = 0.
         for i in range(2*radius+1):
-            s += u_padded[x + i, y_shifted] * k[2*radius-i]
+            s += u_padded[x + i, y] * k[2*radius-i]
         u_convolved[x, y] = s
 
 @ti.func
@@ -241,10 +240,9 @@ def convolve_with_kernel_y_dir(
           `u_padded` with `k`.
     """
     for x, y in u_convolved:
-        x_shifted = x
         s = 0.
         for i in range(2*radius+1):
-            s+= u_padded[x_shifted, y + i] * k[2*radius-i]
+            s+= u_padded[x, y + i] * k[2*radius-i]
         u_convolved[x, y] = s
 
 def gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):

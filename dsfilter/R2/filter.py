@@ -73,6 +73,7 @@ def DS_filter_R2(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
     ### DS switch
     u_DS = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_DS, Ny + 2 * radius_DS))
     fill_padded_u(u, radius_DS, u_DS)
+    fix_reflected_padding(u_DS, radius_DS)
     u_DS_semi = ti.field(dtype=ti.f32, shape=(Nx, Ny + 2 * radius_DS))
     d_dx_DS = ti.field(dtype=ti.f32, shape=(Nx, Ny))
     d_dy_DS = ti.field(dtype=ti.f32, shape=(Nx, Ny))
@@ -81,7 +82,8 @@ def DS_filter_R2(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
     u_structure_tensor = ti.field(dtype=ti.f32, shape=(Nx + 2 * (radius_morph_int + radius_morph_ext),
                                                        Ny + 2 * (radius_morph_int + radius_morph_ext)))
     fill_padded_u(u, radius_morph_ext + radius_morph_int, u_structure_tensor)
-    u_structure_tensor_semi = ti.field(dtype=ti.f32, shape=(Nx, Ny + 2 * (radius_morph_int + radius_morph_ext)))
+    fix_reflected_padding(u_structure_tensor, radius_morph_ext + radius_morph_int)
+    u_structure_tensor_semi = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_ext, Ny + 2 * (radius_morph_int + radius_morph_ext)))
     u_σ_structure_tensor = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_ext, Ny + 2 * radius_morph_ext))
     d_dx_morph = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_ext, Ny + 2 * radius_morph_ext))
     d_dy_morph = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_ext, Ny + 2 * radius_morph_ext))
@@ -92,6 +94,7 @@ def DS_filter_R2(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
     Jρ22 = ti.field(dtype=ti.f32, shape=(Nx, Ny))
     u_dominant_derivative = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_int, Ny + 2 * radius_morph_int))
     fill_padded_u(u, radius_morph_int, u_dominant_derivative)
+    fix_reflected_padding(u_dominant_derivative, radius_morph_ext)
     u_dominant_derivative_semi = ti.field(dtype=ti.f32, shape=(Nx, Ny + 2 * radius_morph_int))
     d_dxx = ti.field(dtype=ti.f32, shape=(Nx, Ny))
     d_dxy = ti.field(dtype=ti.f32, shape=(Nx, Ny))
