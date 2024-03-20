@@ -53,61 +53,51 @@ def DS_filter_R2(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
     k_morph_ext, radius_morph_ext = gaussian_derivative_kernel(ρ, 0)
 
     # Initialise TaiChi objects
-    Nx, Ny = u0_np.shape
-    u0 = ti.field(dtype=ti.f32, shape=(Nx, Ny))
+    shape = u0_np.shape
+    Nx, Ny = shape
+    u0 = ti.field(dtype=ti.f32, shape=shape)
     u0.from_numpy(u0_np)
-    mask = ti.field(dtype=ti.f32, shape=(Nx, Ny))
+    mask = ti.field(dtype=ti.f32, shape=shape)
     mask.from_numpy(mask_np)
-    du_dt = ti.field(dtype=ti.f32, shape=(Nx, Ny))
+    du_dt = ti.field(dtype=ti.f32, shape=shape)
 
     ## Padded versions for derivatives
     u = ti.field(dtype=ti.f32, shape=(Nx + 2, Ny + 2))
-    fill_padded_u(u0, 2, u)
+    fill_padded_u(u0, u)
+    fix_reflected_padding(u, 1)
     ### Laplacian
-    laplacian_u = ti.field(dtype=ti.f32, shape=(Nx, Ny))
+    laplacian_u = ti.field(dtype=ti.f32, shape=shape)
     ### Morphological
-    dilation_u = ti.field(dtype=ti.f32, shape=(Nx, Ny))
-    erosion_u = ti.field(dtype=ti.f32, shape=(Nx, Ny))
+    dilation_u = ti.field(dtype=ti.f32, shape=shape)
+    erosion_u = ti.field(dtype=ti.f32, shape=shape)
 
-    ## Padded versions for switches
+    ## Fields for switches
+    u_switch = ti.field(dtype=ti.f32, shape=shape)
+    fill_u_switch(u, u_switch)
+    convolution_storage = ti.field(dtype=ti.f32, shape=shape)
     ### DS switch
-    u_DS = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_DS, Ny + 2 * radius_DS))
-    fill_padded_u(u, radius_DS, u_DS)
-    fix_reflected_padding(u_DS, radius_DS)
-    u_DS_semi = ti.field(dtype=ti.f32, shape=(Nx, Ny + 2 * radius_DS))
-    d_dx_DS = ti.field(dtype=ti.f32, shape=(Nx, Ny))
-    d_dy_DS = ti.field(dtype=ti.f32, shape=(Nx, Ny))
-    switch_DS = ti.field(dtype=ti.f32, shape=(Nx, Ny))
+    d_dx_DS = ti.field(dtype=ti.f32, shape=shape)
+    d_dy_DS = ti.field(dtype=ti.f32, shape=shape)
+    switch_DS = ti.field(dtype=ti.f32, shape=shape)
     ### Morphological switch
-    u_structure_tensor = ti.field(dtype=ti.f32, shape=(Nx + 2 * (radius_morph_int + radius_morph_ext),
-                                                       Ny + 2 * (radius_morph_int + radius_morph_ext)))
-    fill_padded_u(u, radius_morph_ext + radius_morph_int, u_structure_tensor)
-    fix_reflected_padding(u_structure_tensor, radius_morph_ext + radius_morph_int)
-    u_structure_tensor_semi = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_ext, Ny + 2 * (radius_morph_int + radius_morph_ext)))
-    u_σ_structure_tensor = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_ext, Ny + 2 * radius_morph_ext))
-    d_dx_morph = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_ext, Ny + 2 * radius_morph_ext))
-    d_dy_morph = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_ext, Ny + 2 * radius_morph_ext))
-    Jρ_padded = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_ext, Ny + 2 * radius_morph_ext))
-    Jρ_padded_semi = ti.field(dtype=ti.f32, shape=(Nx, Ny + 2 * radius_morph_ext))
-    Jρ11 = ti.field(dtype=ti.f32, shape=(Nx, Ny))
-    Jρ12 = ti.field(dtype=ti.f32, shape=(Nx, Ny))
-    Jρ22 = ti.field(dtype=ti.f32, shape=(Nx, Ny))
-    u_dominant_derivative = ti.field(dtype=ti.f32, shape=(Nx + 2 * radius_morph_int, Ny + 2 * radius_morph_int))
-    fill_padded_u(u, radius_morph_int, u_dominant_derivative)
-    fix_reflected_padding(u_dominant_derivative, radius_morph_ext)
-    u_dominant_derivative_semi = ti.field(dtype=ti.f32, shape=(Nx, Ny + 2 * radius_morph_int))
-    d_dxx = ti.field(dtype=ti.f32, shape=(Nx, Ny))
-    d_dxy = ti.field(dtype=ti.f32, shape=(Nx, Ny))
-    d_dyy = ti.field(dtype=ti.f32, shape=(Nx, Ny))
-    switch_morph = ti.field(dtype=ti.f32, shape=(Nx, Ny))
+    u_σ = ti.field(dtype=ti.f32, shape=shape)
+    d_dx_morph = ti.field(dtype=ti.f32, shape=shape)
+    d_dy_morph = ti.field(dtype=ti.f32, shape=shape)
+    Jρ_storage = ti.field(dtype=ti.f32, shape=shape)
+    Jρ11 = ti.field(dtype=ti.f32, shape=shape)
+    Jρ12 = ti.field(dtype=ti.f32, shape=shape)
+    Jρ22 = ti.field(dtype=ti.f32, shape=shape)
+    d_dxx = ti.field(dtype=ti.f32, shape=shape)
+    d_dxy = ti.field(dtype=ti.f32, shape=shape)
+    d_dyy = ti.field(dtype=ti.f32, shape=shape)
+    switch_morph = ti.field(dtype=ti.f32, shape=shape)
 
     for _ in tqdm(range(n)):
         # Compute switches
-        DS_switch(u_DS, u_DS_semi, dxy, k_DS, radius_DS, λ, d_dx_DS, d_dy_DS, switch_DS)
-        morphological_switch(u_structure_tensor, u_structure_tensor_semi, u_σ_structure_tensor, u_dominant_derivative,
-                             u_dominant_derivative_semi, dxy, ε, k_morph_int, radius_morph_int, d_dx_morph, d_dy_morph,
-                             k_morph_ext, radius_morph_ext, Jρ_padded, Jρ_padded_semi, Jρ11, Jρ12, Jρ22, d_dxx, d_dxy,
-                             d_dyy, switch_morph)
+        DS_switch(u_switch, dxy, k_DS, radius_DS, λ, d_dx_DS, d_dy_DS, switch_DS, convolution_storage)
+        morphological_switch(u_switch, u_σ, dxy, ε, k_morph_int, radius_morph_int, d_dx_morph, d_dy_morph, k_morph_ext,
+                             radius_morph_ext, Jρ_storage, Jρ11, Jρ12, Jρ22, d_dxx, d_dxy, d_dyy, switch_morph,
+                             convolution_storage)
         # Compute derivatives
         laplacian(u, dxy, laplacian_u)
         morphological(u, dxy, dilation_u, erosion_u)
@@ -117,14 +107,7 @@ def DS_filter_R2(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
         ## For derivatives
         fix_reflected_padding(u, 1)
         ## For switches
-        ### DS switch
-        fill_padded_u(u, radius_DS, u_DS)
-        fix_reflected_padding(u_DS, radius_DS)
-        ### Morphological switch
-        fill_padded_u(u, radius_morph_ext + radius_morph_int, u_structure_tensor)
-        fix_reflected_padding(u_structure_tensor, radius_morph_ext + radius_morph_int)
-        fill_padded_u(u, radius_morph_int, u_dominant_derivative)
-        fix_reflected_padding(u_dominant_derivative, radius_morph_ext)
+        fill_u_switch(u, u_switch)
     return unpad_array(u.to_numpy(), pad_shape=1), switch_DS.to_numpy(), switch_morph.to_numpy()
 
 def compute_timestep(dxy, δ=np.sqrt(2)-1):
@@ -233,7 +216,6 @@ def fix_reflected_padding(
 @ti.kernel
 def fill_padded_u(
     u: ti.template(),
-    radius: ti.i32,
     padded_u: ti.template()
 ):
     """
@@ -243,14 +225,34 @@ def fill_padded_u(
 
     Args:
       Static:
-        `u`: ti.field(dtype=[float], shape=[Nx+2, Ny+2]) content to fill
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) content to fill
           `padded_u`.
-        `radius`: radius of the Gaussian filter used in the switch, taking
-          integer values greater than 0.
       Mutated:
-        `padded_u`: ti.field(dtype=[float], shape=[Nx+2*`radius`, Ny+2*`radius`])
-          switch, updated in place.
+        `padded_u`: ti.field(dtype=[float], shape=[Nx+2, Ny+2]) padded array,
+          updated in place.
     """
-    I_shift = ti.Vector([radius - 1, radius - 1], ti.i32)
+    I_shift = ti.Vector([1, 1], ti.i32)
     for I in ti.grouped(u):
         padded_u[I + I_shift] = u[I]
+
+@ti.kernel
+def fill_u_switch(
+    u: ti.template(),
+    u_switch: ti.template()
+):
+    """
+    @taichi.kernel
+
+    Update the content of the field used to determine the switch.
+
+    Args:
+      Static:
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) content to fill
+          `padded_u`.
+      Mutated:
+        `u_switch`: ti.field(dtype=[float], shape=[Nx+2, Ny+2]) padded array,
+          updated in place.
+    """
+    I_shift = ti.Vector([1, 1], ti.i32)
+    for I in ti.grouped(u_switch):
+        u_switch[I] = u[I + I_shift]

@@ -33,6 +33,31 @@ def sanitize_index(
         ti.math.clamp(index[1], 0, shape[1] - 1),
     ], dt=ti.i32)
 
+@ti.func
+def sanitize_reflected_index(
+    index: ti.types.vector(2, ti.i32),
+    input: ti.template()
+) -> ti.types.vector(2, ti.i32):
+    """
+    @taichi.func
+    
+    Make sure the `index` is inside the shape of `input`, while reflecting at
+    the boundaries.
+
+    Args:
+        `index`: ti.types.vector(n=2, dtype=ti.i32) index.
+        `input`: ti.field in which we want to index.
+
+    Returns:
+        ti.types.vector(n=2, dtype=ti.i32) of index that is within `input`.
+    """
+    i, j = index
+    i_max, j_max = ti.Vector(ti.static(input.shape), dt=ti.i32) - ti.Vector([1, 1], dt=ti.i32)
+    return ti.Vector([
+        -i * (i < 0) + i * (0 <= i <= i_max) + (2 * i_max - i) * (i > i_max),
+        -j * (j < 0) + j * (0 <= j <= j_max) + (2 * j_max - j) * (j > j_max),
+    ], dt=ti.i32)
+
 # Distance Map
 
 def get_boundary_conditions(source_point):
