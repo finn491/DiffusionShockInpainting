@@ -1,4 +1,29 @@
-# derivativesR2.py
+"""
+    derivatives
+    ===========
+
+    Provides a variety of derivative operators on R^2, namely:
+      1. `laplacian`: computes an approximation to the Laplacian with good
+      rotation invariance, see Eq. (9) of [1] by K. Schaefer and J. Weickert,
+      2. `morphological`: computes approximations to the dilation and erosion
+      operators +/- ||grad u|| with good rotation invariance, see Eq. (12) of
+      [1] by K. Schaefer and J. Weickert.
+      3. `gaussian_derivative_kernel`: computes 1D Gaussian derivative kernels
+      of order 0 and 1, using an algorithm that improves the accuracy of higher
+      order derivative kernels with small widths, based on the DIPlib[2]
+      algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
+
+    References:
+      [1]: K. Schaefer and J. Weickert.
+      "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
+      Computer Vision 14009 (2023), pp. 588--600.
+      DOI:10.1137/15M1018460.
+      [2]: C. Luengo, W. Caarls, R. Ligteringen, E. Schuitema, Y. Guo,
+      E. Wernersson, F. Malmberg, S. Lokhorst, M. Wolff, G. van Kempen,
+      M. van Ginkel, L. van Vliet, B. Rieger, B. Verwer, H. Netten,
+      J. W. Brandenburg, J. Dijk, N. van den Brink, F. Faas, K. van Wijk,
+      and T. Pham. "DIPlib 3". GitHub: https://github.com/DIPlib/diplib.
+"""
 
 import taichi as ti
 from dsfilter.R2.utils import (
@@ -21,8 +46,8 @@ def laplacian(
     @taichi.kernel
 
     Compute an approximation of the Laplacian of `u` using axial and diagonal
-    central differences, as found in "Diffusion-Shock Inpainting" (2023) by K.
-    Schaefer and J. Weickert, Eq. (9).
+    central differences, as described by by K. Schaefer and J. Weickert in
+    Eq. (9) of [1].
 
     Args:
       Static:
@@ -32,6 +57,12 @@ def laplacian(
       Mutated:
         `laplacian_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of laplacian of
           u, which is updated in place.
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
+          Computer Vision 14009 (2023), pp. 588--600.
+          DOI:10.1137/15M1018460.
     """
     δ = ti.math.sqrt(2) - 1 # Good value for rotation invariance according to M. Welk and J. Weickert (2021)
     I_shift = ti.Vector([1, 1], dt=ti.i32)
@@ -75,8 +106,7 @@ def morphological(
     @taichi.kernel
 
     Compute an approximation of the ||grad `u`|| using axial and diagonal upwind
-    differences, as found in "Diffusion-Shock Inpainting" (2023) by K.
-    Schaefer and J. Weickert, Eq. (12).
+    differences, as by K. Schaefer and J. Weickert in Eq. (12) of [1].
 
     Args:
       Static:
@@ -88,6 +118,12 @@ def morphological(
           which is updated in place.
         `erosion_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of -||grad `u`||,
           which is updated in place.
+          
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
+          Computer Vision 14009 (2023), pp. 588--600.
+          DOI:10.1137/15M1018460.
     """
     δ = ti.math.sqrt(2) - 1 # Good value for rotation invariance according to M. Welk and J. Weickert (2021)
     I_shift = ti.Vector([1, 1], dt=ti.i32)
@@ -253,7 +289,7 @@ def convolve_with_kernel_y_dir(
 def gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):
     """Compute kernel for 1D Gaussian derivative of order `order` at scale `σ`.
 
-    Based on the DIPlib algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
+    Based on the DIPlib[1] algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
 
     Args:
         `σ`: scale of Gaussian, taking values greater than 0.
@@ -265,6 +301,13 @@ def gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):
     Returns:
         Tuple ti.field(dtype=[float], shape=2*radius+1) of the Gaussian kernel
           and the radius of the kernel.
+
+    References:
+        [1]: C. Luengo, W. Caarls, R. Ligteringen, E. Schuitema, Y. Guo,
+          E. Wernersson, F. Malmberg, S. Lokhorst, M. Wolff, G. van Kempen,
+          M. van Ginkel, L. van Vliet, B. Rieger, B. Verwer, H. Netten,
+          J. W. Brandenburg, J. Dijk, N. van den Brink, F. Faas, K. van Wijk,
+          and T. Pham. "DIPlib 3". GitHub: https://github.com/DIPlib/diplib.
     """
     radius = int(σ * truncate + 0.5)
     k = ti.field(dtype=ti.f32, shape=2*radius+1)
@@ -289,7 +332,7 @@ def gaussian_derivative_kernel_order_0(
     
     Compute 1D Gaussian kernel at scale `σ`.
 
-    Based on the DIPlib algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
+    Based on the DIPlib[1] algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
 
     Args:
       Static:
@@ -300,6 +343,13 @@ def gaussian_derivative_kernel_order_0(
       Mutated:
         `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel, which is
           updated in place.
+
+    References:
+        [1]: C. Luengo, W. Caarls, R. Ligteringen, E. Schuitema, Y. Guo,
+          E. Wernersson, F. Malmberg, S. Lokhorst, M. Wolff, G. van Kempen,
+          M. van Ginkel, L. van Vliet, B. Rieger, B. Verwer, H. Netten,
+          J. W. Brandenburg, J. Dijk, N. van den Brink, F. Faas, K. van Wijk,
+          and T. Pham. "DIPlib 3". GitHub: https://github.com/DIPlib/diplib.
     """
     ti.loop_config(serialize=True)
     for i in range(2*radius+1):
@@ -320,7 +370,7 @@ def gaussian_derivative_kernel_order_1(
     
     Compute kernel for 1D Gaussian derivative of order 1 at scale `σ`.
 
-    Based on the DIPlib algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
+    Based on the DIPlib[1] algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
 
     Args:
       Static:
@@ -331,6 +381,13 @@ def gaussian_derivative_kernel_order_1(
       Mutated:
         `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel, which is
           updated in place.
+
+    References:
+        [1]: C. Luengo, W. Caarls, R. Ligteringen, E. Schuitema, Y. Guo,
+          E. Wernersson, F. Malmberg, S. Lokhorst, M. Wolff, G. van Kempen,
+          M. van Ginkel, L. van Vliet, B. Rieger, B. Verwer, H. Netten,
+          J. W. Brandenburg, J. Dijk, N. van den Brink, F. Faas, K. van Wijk,
+          and T. Pham. "DIPlib 3". GitHub: https://github.com/DIPlib/diplib.
     """
     moment = 0.
     ti.loop_config(serialize=True)

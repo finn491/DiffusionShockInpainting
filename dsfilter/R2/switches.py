@@ -1,4 +1,25 @@
-# switches.py
+"""
+    switches
+    ========
+
+    Provides the operators to switch between diffusion and shock, and between
+    dilation and erosion, as described by K. Schaefer and J. Weickert.[1][2]
+    The primary methods are:
+      1. `DS_switch`: switches between diffusion and shock. If there is locally
+      a clear orientation, more shock is applied, see Eq. (7) in [1].
+      2. `morphological_switch`: switches between dilation and erosion. If the
+      data is locally convex, erosion is applied, while if the data is locally
+      concave, dilation is applied, see Eq. (4) in [1].
+
+    References:
+      [1]: K. Schaefer and J. Weickert.
+      "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
+      Computer Vision 14009 (2023), pp. 588--600.
+      DOI:10.1137/15M1018460.
+      [2]: K. Schaefer and J. Weickert.
+      "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+      DOI:10.48550/arXiv.2309.08761.
+"""
 
 import taichi as ti
 from dsfilter.R2.derivatives import (
@@ -27,8 +48,8 @@ def DS_switch(
     """
     @taichi.kernel
 
-    Determine to what degree we should perform diffusion or shock, as in
-    "Diffusion-Shock Inpainting" (2023) by K. Schaefer and J. Weickert.
+    Determine to what degree we should perform diffusion or shock, as described
+    by K. Schaefer and J. Weickert.[1][2]
 
     Args:
       Static:
@@ -44,6 +65,15 @@ def DS_switch(
         `switch`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of values that
           determine the degree of diffusion or shock, taking values between 0
           and 1, which is updated in place.
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
+          Computer Vision 14009 (2023), pp. 588--600.
+          DOI:10.1137/15M1018460.
+        [2]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+          DOI:10.48550/arXiv.2309.08761.
     """
     # First regularise with Gaussian convolution.
     convolve_with_kernel_x_dir(u, k, radius, convolution_storage)
@@ -61,8 +91,8 @@ def g_scalar(
     """
     @taichi.func
     
-    Compute g, the function that switches between diffusion and shock in
-    "Diffusion-Shock Inpainting" (2023) by K. Schaefer and J. Weickert.
+    Compute g, the function that switches between diffusion and shock, given
+    by Eq. (5) in [1] by K. Schaefer and J. Weickert.
 
     Args:
         `s_squared`: square of some scalar, taking values greater than 0.
@@ -70,6 +100,11 @@ def g_scalar(
 
     Returns:
         ti.f32 of g(`s_squared`).
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+          DOI:10.48550/arXiv.2309.08761.
     """
     return 1 / ti.math.sqrt(1 + s_squared / λ**2)
 
@@ -103,8 +138,8 @@ def morphological_switch(
     """
     @taichi.func
     
-    Determine whether to perform dilation or erosion, as in
-    "Diffusion-Shock Inpainting" (2023) by K. Schaefer and J. Weickert.
+    Determine whether to perform dilation or erosion, as described by
+    K. Schaefer and J. Weickert.[1][2]
 
     Args:
       Static:
@@ -137,6 +172,15 @@ def morphological_switch(
           and 1, which is updated in place.
         `convolution_storage`: ti.field(dtype=[float], shape=[Nx, Ny]) array to
           hold intermediate results when performing convolutions.
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
+          Computer Vision 14009 (2023), pp. 588--600.
+          DOI:10.1137/15M1018460.
+        [2]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+          DOI:10.48550/arXiv.2309.08761.
     """
     compute_structure_tensor(u, u_σ, dxy, k_int, radius_int, d_dx, d_dy, k_ext, radius_ext, Jρ_storage, Jρ11, Jρ12,
                              Jρ22, convolution_storage)
@@ -241,8 +285,8 @@ def S_ε_field(
     """
     @taichi.func
     
-    Compute Sε, the regularised signum as seen in "Regularised Diffusion-Shock 
-    Inpainting" (2023) by K. Schaefer and J. Weickert.
+    Compute Sε, the regularised signum as given by K. Schaefer and J. Weickert
+    in Eq. (7) in [1].
 
     Args:
       Static:
@@ -250,6 +294,11 @@ def S_ε_field(
         `ε`: regularisation parameter, taking values greater than 0.
       Mutated:
         `S_ε_of_u`: ti.field(dtype=ti.f32) of S`ε`(`u`).
+        
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+          DOI:10.48550/arXiv.2309.08761.
     """
     for I in ti.grouped(u):
         S_ε_of_u[I] = S_ε_scalar(u[I], ε)
@@ -262,8 +311,8 @@ def S_ε_scalar(
     """
     @taichi.func
     
-    Compute Sε, the regularised signum as seen in "Regularised Diffusion-Shock 
-    Inpainting" (2023) by K. Schaefer and J. Weickert.
+    Compute Sε, the regularised signum as given by K. Schaefer and J. Weickert
+    in Eq (7) in [1].
 
     Args:
         `x`: scalar to pass through regularised signum, taking values greater 
@@ -272,6 +321,11 @@ def S_ε_scalar(
 
     Returns:
         ti.f32 of S`ε`(`x`).
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+          DOI:10.48550/arXiv.2309.08761.
     """
     return (2 / ti.math.pi) * ti.math.atan2(x, ε)
 
@@ -288,8 +342,8 @@ def sobel_gradient(
     @taichi.func
     
     Compute approximations of the first order derivatives of `u` in the x and y 
-    direction using Sobel operators, as described in Eq. (26) of "Regularised 
-    Diffusion-Shock Inpainting" (2023) by K. Schaefer and J. Weickert.
+    direction using Sobel operators, as described in Eq. (26) in [1] by
+    K. Schaefer and J. Weickert.
 
     Args:
       Static:
@@ -298,7 +352,12 @@ def sobel_gradient(
         `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
         `d*_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of d* `u`, which is
-          updated in place.    
+          updated in place.
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+          DOI:10.48550/arXiv.2309.08761.
     """
     I_dx = ti.Vector([1, 0], dt=ti.i32)
     I_dy = ti.Vector([0, 1], dt=ti.i32)

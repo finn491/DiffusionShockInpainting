@@ -1,4 +1,21 @@
-# dsfilter.py
+"""
+    filter
+    ======
+
+    Provides methods to apply R^2 Diffusion-Shock inpainting, as described by
+    K. Schaefer and J. Weickert.[1][2] The primary method is:
+      1. `DS_filter`: apply R^2 Diffusion-Shock inpainting to an array
+      describing an image, given an inpainting mask and various PDE parameters.
+
+    References:
+      [1]: K. Schaefer and J. Weickert.
+      "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
+      Computer Vision 14009 (2023), pp. 588--600.
+      DOI:10.1137/15M1018460.
+      [2]: K. Schaefer and J. Weickert.
+      "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+      DOI:10.48550/arXiv.2309.08761.
+"""
 
 import taichi as ti
 import numpy as np
@@ -14,10 +31,10 @@ from dsfilter.R2.derivatives import (
 )
 from dsfilter.utils import unpad_array
 
-def DS_filter_R2(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
+def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
     """
     Perform Diffusion-Shock inpainting in R^2, according to Schaefer and
-    Weickert "Diffusion-Shock Inpainting" (2023).
+    Weickert.[1][2]
 
     Args:
         `u0_np`: np.ndarray initial condition, with shape [Nx, Ny].
@@ -43,6 +60,15 @@ def DS_filter_R2(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
         time `T`.
         TEMP: np.ndarray switch between diffusion and shock, and np.ndarray
         switch between dilation and erosion.
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
+          Computer Vision 14009 (2023), pp. 588--600.
+          DOI:10.1137/15M1018460.
+        [2]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+          DOI:10.48550/arXiv.2309.08761.
     """
     # Set hyperparameters
     dt = compute_timestep(dxy)
@@ -112,8 +138,8 @@ def DS_filter_R2(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
 
 def compute_timestep(dxy, δ=np.sqrt(2)-1):
     """
-    Compute timestep to solve Diffusion-Shock PDE, such that the scheme retains
-    the maximum-minimum principle of the continuous PDE.
+    Compute timestep to solve Diffusion-Shock PDE,[1][2] such that the scheme
+    retains the maximum-minimum principle of the continuous PDE.
     
     Args:
         `dxy`: step size in x and y direction, taking values greater than 0.
@@ -126,10 +152,19 @@ def compute_timestep(dxy, δ=np.sqrt(2)-1):
     
     Returns:
         timestep, taking values greater than 0.
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
+          Computer Vision 14009 (2023), pp. 588--600.
+          DOI:10.1137/15M1018460.
+        [2]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+          DOI:10.48550/arXiv.2309.08761.
     """
     τ_D = dxy**2 / (4 - 2 * δ)
     τ_M = dxy / (np.sqrt(2) * (1 - δ) + δ)
-    return min(τ_D, τ_M) #/ 2
+    return min(τ_D, τ_M) # See Theorem 1 in [2].
 
 
 @ti.kernel
