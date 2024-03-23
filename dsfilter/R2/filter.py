@@ -26,9 +26,9 @@ from dsfilter.R2.switches import (
 )
 from dsfilter.R2.derivatives import (
     laplacian,
-    morphological,
-    gaussian_derivative_kernel
+    morphological
 )
+from dsfilter.R2.regularisers import gaussian_derivative_kernel
 from dsfilter.utils import unpad_array
 
 def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):

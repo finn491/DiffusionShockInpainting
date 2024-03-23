@@ -22,11 +22,11 @@
 """
 
 import taichi as ti
-from dsfilter.R2.derivatives import (
+from dsfilter.R2.regularisers import (
     convolve_with_kernel_x_dir,
-    convolve_with_kernel_y_dir,
-    central_derivatives_second_order
+    convolve_with_kernel_y_dir
 )
+from dsfilter.R2.derivatives import central_derivatives_second_order
 from dsfilter.R2.utils import sanitize_index
 
 # Diffusion-Shock
