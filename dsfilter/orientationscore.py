@@ -98,32 +98,27 @@ def B_spline_matrix(n, x):
     smoothly in the angular direction in the Fourier domain. See Section 4.6
     in Duits "Perceptual Organization in Image Analysis" (2005).
     """
+    # This is the bottleneck of computing the cakewavelet stack.
     ε = np.finfo(np.float64).eps
+    # Only need to compute these coefficients once.
+    coeffs = []
+    for k in range(n + 2):
+        binom_cof = sp.special.binom(n + 1, k)
+        coeffs.append(binom_cof * (x + (n + 1) / 2 - k) ** (n + 1 - 1) * (-1)**k)
+
     r = 0
     for i in np.arange(-n/2, n/2 + 1):
         s = 0
+        # There seems to be no way to do this without a loop that does not break
+        # broadcasting, except for allocating meshgrid arrays, which is slower.
         for k in range(n + 2):
-            binom_cof = sp.special.binom(n + 1, k)
             sign = np.sign(i + (n + 1) / 2 - k)
-            s += binom_cof * (x + (n + 1) / 2 - k) ** (n + 1 - 1) * (-1)**k * sign
+            s += coeffs[k] * sign
 
-        f = s / (2 * sp.special.factorial(n+1-1))
+        f = s / (2 * sp.special.factorial(n))
         ic = np.heaviside((x - (i - 1/2 + ε)), 1) * np.heaviside(-(x - (i + 1/2 - ε*(i>=n/2))), 1)
-        
         r += f * np.round(ic)
     return r
-## This does not work because it breaks broadcasting over x.
-#     ε = np.finfo(np.float64).eps
-#     js = np.arange(-n/2, n/2 + 1)
-#     ss = np.zeros(n + 1)
-#     for k in range(n + 2):
-#         binom_cof = sp.special.binom(n + 1, k)
-#         signs = np.sign(js + (n + 1) / 2 - k)
-#         ss += binom_cof * (x + (n + 1) / 2 - k) ** (n + 1 - 1) * (-1)**k * signs
-#     fs = ss / (2 * sp.special.factorial(n))
-#     ics = np.heaviside((x - (js - 1/2 + ε)), 1) * np.heaviside(-(x - (js + 1/2 - ε*(js>=n/2))), 1)    
-#     r = np.sum(fs * np.round(ics))
-#     return r
 
 def cakewavelet_stack_fourier(N_spatial, dθ, spline_order, overlap_factor, inflection_point, mn_order, DC_σ):
     """
