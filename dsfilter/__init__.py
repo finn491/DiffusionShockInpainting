@@ -28,3 +28,6 @@ import dsfilter.R2
 # Most important functions are available at top level
 ## R2
 from dsfilter.R2.filter import DS_filter as DS_filter_R2
+## SE(2)
+### Left invariant
+from dsfilter.SE2.LI.filter import DS_filter as DS_filter_LI

@@ -2,15 +2,24 @@
     regularisers
     ============
 
-    Provides tools to regularise scalar fields on R^2, namely:
+    Provides tools to regularise scalar fields on SE(2), namely:
       1. `convolve_with_kernel_x_dir`: convolve a field with a 1D kernel along
       the x-direction.
       2. `convolve_with_kernel_y_dir`: convolve a field with a 1D kernel along
       the y-direction.
-      3. `gaussian_derivative_kernel`: computes 1D Gaussian derivative kernels
+      3. `convolve_with_kernel_θ_dir`: convolve a field with a 1D kernel along
+      the θ-direction.
+      4. `gaussian_derivative_kernel`: computes 1D Gaussian derivative kernels
       of order 0 and 1, using an algorithm that improves the accuracy of higher
       order derivative kernels with small widths, based on the DIPlib[1]
       algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
+    We use that the spatially isotropic diffusion equation on SE(2) can be
+    solved by convolving in the x-, y-, and θ-direction with some 1D kernel. For
+    the x- and y-directions, this kernel is a Gaussian; for the θ-direction the
+    kernel looks like a Gaussian if the amount of diffusion is sufficiently
+    small.
+
+    TODO: maybe add in correct kernel for θ-direction?
 
     References:
       [1]: C. Luengo, W. Caarls, R. Ligteringen, E. Schuitema, Y. Guo,
@@ -21,7 +30,7 @@
 """
 
 import taichi as ti
-from dsfilter.R2.utils import sanitize_reflected_index
+from dsfilter.SE2.utils import sanitize_reflected_index
 
 # We cannot nest parallelised loops in if-else statements in TaiChi kernels.
 
@@ -39,21 +48,20 @@ def convolve_with_kernel_x_dir(
 
     Args:
       Static:
-        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) array to
-          be convolved.
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) array to be convolved.
         `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel.
         `radius`: radius at which kernel `k` is truncated, taking integer values
           greater than 0.
       Mutated:
-        `u_convolved`: ti.field(dtype=[float], shape=[Nx, Ny]) convolution of
-        `u` with `k`.
+        `u_convolved`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) convolution
+        of `u` with `k`.
     """
-    for x, y in u_convolved:
+    for x, y, θ in u_convolved:
         s = 0.
         for i in range(2*radius+1):
-            index = sanitize_reflected_index(ti.Vector([x - radius + i, y], dt=ti.i32), u)
+            index = sanitize_reflected_index(ti.Vector([x - radius + i, y, θ], dt=ti.i32), u)
             s += u[index] * k[2*radius-i]
-        u_convolved[x, y] = s
+        u_convolved[x, y, θ] = s
 
 @ti.func
 def convolve_with_kernel_y_dir(
@@ -69,20 +77,50 @@ def convolve_with_kernel_y_dir(
 
     Args:
       Static:
-        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) array to be convolved.
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) array to be convolved.
         `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel.
         `radius`: radius at which kernel `k` is truncated, taking integer values
           greater than 0.
       Mutated:
-        `u_convolved`: ti.field(dtype=[float], shape=[Nx, Ny]) convolution of 
-          `u` with `k`.
+        `u_convolved`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) convolution
+          of `u` with `k`.
     """
-    for x, y in u_convolved:
+    for x, y, θ in u_convolved:
         s = 0.
         for i in range(2*radius+1):
-            index = sanitize_reflected_index(ti.Vector([x, y - radius + i], dt=ti.i32), u)
+            index = sanitize_reflected_index(ti.Vector([x, y - radius + i, θ], dt=ti.i32), u)
             s+= u[index] * k[2*radius-i]
-        u_convolved[x, y] = s
+        u_convolved[x, y, θ] = s
+
+@ti.func
+def convolve_with_kernel_θ_dir(
+    u: ti.template(),
+    k: ti.template(),
+    radius: ti.i32,
+    u_convolved: ti.template()
+):
+    """
+    @taichi.func
+    
+    Convolve `u` the 1D kernel `k` in the y-direction.
+
+    Args:
+      Static:
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) array to be convolved.
+        `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel.
+        `radius`: radius at which kernel `k` is truncated, taking integer values
+          greater than 0.
+      Mutated:
+        `u_convolved`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) convolution
+          of `u` with `k`.
+    """
+    for x, y, θ in u_convolved:
+        s = 0.
+        for i in range(2*radius+1):
+            # This may in fact give the correct convolution...
+            index = sanitize_reflected_index(ti.Vector([x, y, θ - radius + i], dt=ti.i32), u)
+            s+= u[index] * k[2*radius-i]
+        u_convolved[x, y, θ] = s
 
 def gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):
     """Compute kernel for 1D Gaussian derivative of order `order` at scale `σ`.
