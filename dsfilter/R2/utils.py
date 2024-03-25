@@ -58,59 +58,6 @@ def sanitize_reflected_index(
         -j * (j < 0) + j * (0 <= j <= j_max) + (2 * j_max - j) * (j > j_max),
     ], dt=ti.i32)
 
-# Distance Map
-
-def get_boundary_conditions(source_point):
-    """
-    Determine the boundary conditions from `source_point`, giving the boundary
-    points and boundary values as TaiChi objects.
-    """
-    i_0, j_0 = source_point
-    boundarypoints_np = np.array([[i_0 + 1, j_0 + 1]], dtype=int) # Account for padding.
-    boundaryvalues_np = np.array([0.], dtype=float)
-    boundarypoints = ti.Vector.field(n=2, dtype=ti.i32, shape=1)
-    boundarypoints.from_numpy(boundarypoints_np)
-    boundaryvalues = ti.field(shape=1, dtype=ti.f32)
-    boundaryvalues.from_numpy(boundaryvalues_np)
-    return boundarypoints, boundaryvalues
-
-@ti.kernel
-def field_abs_max(
-    scalar_field: ti.template()
-) -> ti.f32:
-    """
-    @taichi.kernel
-
-    Find the largest absolute value in `scalar_field`.
-
-    Args:
-        static: ti.field(dtype=[float], shape=shape) of 2D scalar field.
-
-    Returns:
-        Largest absolute value in `scalar_field`.
-    """
-    value = ti.abs(scalar_field[0, 0])
-    for I in ti.grouped(scalar_field):
-        value = ti.atomic_max(value, ti.abs(scalar_field[I]))
-    return value
-
-def check_convergence(dW_dt, tol=1e-3, target_point=None):
-    """
-    Check whether the IVP method has converged by comparing the Hamiltonian
-    `dW_dt` to tolerance `tol`. If `target_point` is provided, only check
-    convergence at `target_point`; otherwise check throughout the domain.
-    """
-    is_converged = False
-    if target_point is None:
-        error = field_abs_max(dW_dt)
-        print(error)
-        is_converged = error < tol
-    else:
-        error = ti.abs(dW_dt[target_point])
-        print(error)
-        is_converged = error < tol
-    return is_converged
-
 # Coordinate Transforms
 
 def coordinate_real_to_array(x, y, x_min, y_min, dxy):
