@@ -25,18 +25,18 @@
 import taichi as ti
 import numpy as np
 from tqdm import tqdm
-from dsfilter.R2.switches import (
+from dsfilter.SE2.LI.switches import (
     DS_switch,
     morphological_switch
 )
-from dsfilter.R2.derivatives import (
+from dsfilter.SE2.LI.derivatives import (
     laplacian,
     morphological
 )
-from dsfilter.R2.regularisers import gaussian_derivative_kernel
+from dsfilter.SE2.regularisers import gaussian_derivative_kernel
 from dsfilter.utils import unpad_array
 
-def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
+def DS_filter(u0_np, mask_np, T, σ_s_DS, σ_o_DS, σ_s_morph, σ_a_morph, λ, ε=0., dxy=1.):
     """
     Perform Diffusion-Shock inpainting in R^2, according to Schaefer and
     Weickert.[1][2]

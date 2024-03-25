@@ -28,6 +28,10 @@ from dsfilter.R2.regularisers import (
 )
 from dsfilter.R2.derivatives import central_derivatives_second_order
 from dsfilter.R2.utils import sanitize_index
+from dsfilter.utils import (
+    S_ε,
+    g_scalar
+)
 
 # Diffusion-Shock
 
@@ -53,8 +57,7 @@ def DS_switch(
 
     Args:
       Static:
-        `u`: ti.field(dtype=ti.f32, shape=[Nx, Ny])
-          array to be convolved.
+        `u`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) current state.
         `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) Gaussian kernel.
         `radius`: radius at which kernel `k` is truncated, taking integer values
           greater than 0.
@@ -62,7 +65,7 @@ def DS_switch(
       Mutated:
         `d_d*`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of derivatives, which are
           updated in place.
-        `switch`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of values that
+        `switch`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) values that
           determine the degree of diffusion or shock, taking values between 0
           and 1, which is updated in place.
 
@@ -82,32 +85,6 @@ def DS_switch(
     sobel_gradient(switch, dxy, d_dx, d_dy)
     for I in ti.grouped(switch):
         switch[I] = g_scalar(d_dx[I]**2 + d_dy[I]**2, λ)
-
-@ti.func
-def g_scalar(
-    s_squared: ti.f32, 
-    λ: ti.f32
-) -> ti.f32:
-    """
-    @taichi.func
-    
-    Compute g, the function that switches between diffusion and shock, given
-    by Eq. (5) in [1] by K. Schaefer and J. Weickert.
-
-    Args:
-        `s_squared`: square of some scalar, taking values greater than 0.
-        `λ`: contrast parameter, taking values greater than 0.
-
-    Returns:
-        ti.f32 of g(`s_squared`).
-
-    References:
-        [1]: K. Schaefer and J. Weickert.
-          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
-          DOI:10.48550/arXiv.2309.08761.
-    """
-    return 1 / ti.math.sqrt(1 + s_squared / λ**2)
-
 
 # Morphological
 
@@ -155,7 +132,6 @@ def morphological_switch(
           with standard deviation ρ.
         `radius_ext`: radius at which kernel `k_ext` is truncated, taking
           integer values greater than 0.
-        `u`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of current state.
       Mutated:
         `u_σ`: ti.field(dtype=[float], shape=[Nx, Ny]) u convolved with Gaussian
           with standard deviation σ.
@@ -167,7 +143,7 @@ def morphological_switch(
           regularised structure tensor.
         `d_d**`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of second order Gaussian
           derivatives, which are updated in place.
-        `switch`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of values that
+        `switch`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) values that
           determine the degree of dilation or erosion, taking values between -1
           and 1, which is updated in place.
         `convolution_storage`: ti.field(dtype=[float], shape=[Nx, Ny]) array to
@@ -206,7 +182,7 @@ def morphological_switch(
         s = 2 * A12 / norm
 
         d_dww = c**2 * d_dxx[I] + 2 * c * s * d_dxy[I] + s**2 * d_dyy[I]
-        switch[I] = (ε > 0.) * S_ε_scalar(d_dww, ε) + (ε == 0.) * ti.math.sign(d_dww)
+        switch[I] = (ε > 0.) * S_ε(d_dww, ε) + (ε == 0.) * ti.math.sign(d_dww)
 
 @ti.func
 def compute_structure_tensor(
@@ -274,60 +250,6 @@ def compute_structure_tensor(
         Jρ_storage[I] = d_dy[I]**2
     convolve_with_kernel_x_dir(Jρ_storage, k_ext, radius_ext, convolution_storage)
     convolve_with_kernel_y_dir(convolution_storage, k_ext, radius_ext, Jρ22)
-
-
-@ti.func
-def S_ε_field(
-    u: ti.template(),
-    ε: ti.f32,
-    S_ε_of_u: ti.template()
-):
-    """
-    @taichi.func
-    
-    Compute Sε, the regularised signum as given by K. Schaefer and J. Weickert
-    in Eq. (7) in [1].
-
-    Args:
-      Static:
-        `u`: ti.field(dtype=ti.f32) to pass through regularised signum.
-        `ε`: regularisation parameter, taking values greater than 0.
-      Mutated:
-        `S_ε_of_u`: ti.field(dtype=ti.f32) of S`ε`(`u`).
-        
-    References:
-        [1]: K. Schaefer and J. Weickert.
-          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
-          DOI:10.48550/arXiv.2309.08761.
-    """
-    for I in ti.grouped(u):
-        S_ε_of_u[I] = S_ε_scalar(u[I], ε)
-
-@ti.func
-def S_ε_scalar(
-    x: ti.f32,
-    ε: ti.f32
-) -> ti.f32:
-    """
-    @taichi.func
-    
-    Compute Sε, the regularised signum as given by K. Schaefer and J. Weickert
-    in Eq (7) in [1].
-
-    Args:
-        `x`: scalar to pass through regularised signum, taking values greater 
-          than 0.
-        `ε`: regularisation parameter, taking values greater than 0.
-
-    Returns:
-        ti.f32 of S`ε`(`x`).
-
-    References:
-        [1]: K. Schaefer and J. Weickert.
-          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
-          DOI:10.48550/arXiv.2309.08761.
-    """
-    return (2 / ti.math.pi) * ti.math.atan2(x, ε)
 
 # Derivatives
 

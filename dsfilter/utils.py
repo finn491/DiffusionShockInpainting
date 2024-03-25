@@ -75,6 +75,59 @@ def select_upwind_derivative_erosion(
     """
     return ti.math.max(-d_forward, d_backward, 0) * (-1.)**(-d_forward >= d_backward)
 
+# Switches
+
+@ti.func
+def S_ε(
+    x: ti.f32,
+    ε: ti.f32
+) -> ti.f32:
+    """
+    @taichi.func
+    
+    Compute Sε, the regularised signum as given by K. Schaefer and J. Weickert
+    in Eq (7) in [1].
+
+    Args:
+        `x`: scalar to pass through regularised signum, taking values greater 
+          than 0.
+        `ε`: regularisation parameter, taking values greater than 0.
+
+    Returns:
+        ti.f32 of S`ε`(`x`).
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+          DOI:10.48550/arXiv.2309.08761.
+    """
+    return (2 / ti.math.pi) * ti.math.atan2(x, ε)
+
+@ti.func
+def g_scalar(
+    s_squared: ti.f32, 
+    λ: ti.f32
+) -> ti.f32:
+    """
+    @taichi.func
+    
+    Compute g, the function that switches between diffusion and shock, given
+    by Eq. (5) in [1] by K. Schaefer and J. Weickert.
+
+    Args:
+        `s_squared`: square of some scalar, taking values greater than 0.
+        `λ`: contrast parameter, taking values greater than 0.
+
+    Returns:
+        ti.f32 of g(`s_squared`).
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+          DOI:10.48550/arXiv.2309.08761.
+    """
+    return 1 / ti.math.sqrt(1 + s_squared / λ**2)
+
 # Padding
 
 def pad_array(u, pad_value=0., pad_shape=1):
