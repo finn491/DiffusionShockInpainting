@@ -17,7 +17,10 @@
 """
 
 import taichi as ti
-from dsfilter.R2.utils import sanitize_index
+from dsfilter.R2.utils import (
+    sanitize_index,
+    index_reflected
+)
 from dsfilter.utils import (
     select_upwind_derivative_dilation,
     select_upwind_derivative_erosion
@@ -26,7 +29,7 @@ from dsfilter.utils import (
 
 @ti.kernel
 def laplacian(
-    u_padded: ti.template(),
+    u: ti.template(),
     dxy: ti.f32,
     laplacian_u: ti.template()
 ):
@@ -39,8 +42,8 @@ def laplacian(
 
     Args:
       Static:
-        `u_padded`: ti.field(dtype=[float], shape=[Nx+2, Ny+2]) u padded with
-          reflecting boundaries.
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) which we want to
+          differentiate.
         `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
         `laplacian_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of laplacian of
@@ -53,34 +56,34 @@ def laplacian(
           DOI:10.1137/15M1018460.
     """
     δ = ti.math.sqrt(2) - 1 # Good value for rotation invariance according to M. Welk and J. Weickert (2021)
-    I_shift = ti.Vector([1, 1], dt=ti.i32)
     I_dx = ti.Vector([1, 0], dt=ti.i32)
     I_dy = ti.Vector([0, 1], dt=ti.i32)
     I_dplus = I_dx + I_dy  # Positive diagonal
     I_dminus = I_dx - I_dy # Negative diagonal
-    for I_unshifted in ti.grouped(laplacian_u):
-        I = I_unshifted + I_shift # Account for the padding.
+    for I in ti.grouped(laplacian_u):
+        # We are on the grid, so interpolation is unnecessary, but I was lazy.
+
         # Axial Stencil
         # 0 |  1 | 0
         # 1 | -4 | 1
         # 0 |  1 | 0
-        laplacian_u[I_unshifted] = (1 - δ) / dxy**2 * (
-            -4 * u_padded[I] +
-            u_padded[I + I_dx] +
-            u_padded[I - I_dx] +
-            u_padded[I + I_dy] +
-            u_padded[I - I_dy]
+        laplacian_u[I] = (1 - δ) / dxy**2 * (
+            -4 * u[I] +
+            index_reflected(u, I + I_dx) +
+            index_reflected(u, I - I_dx) +
+            index_reflected(u, I + I_dy) +
+            index_reflected(u, I - I_dy)
         )
         # Diagonal Stencil
         # 1 |  0 | 1
         # 0 | -4 | 0
         # 1 |  0 | 1
-        laplacian_u[I_unshifted] += δ / (2 * dxy**2) * (
-            -4 * u_padded[I] +
-            u_padded[I + I_dplus] +
-            u_padded[I - I_dplus] +
-            u_padded[I + I_dminus] +
-            u_padded[I - I_dminus]
+        laplacian_u[I] += δ / (2 * dxy**2) * (
+            -4 * u[I] +
+            index_reflected(u, I + I_dplus) +
+            index_reflected(u, I - I_dplus) +
+            index_reflected(u, I + I_dminus) +
+            index_reflected(u, I - I_dminus)
         )
 
 @ti.kernel
@@ -98,7 +101,7 @@ def morphological(
 
     Args:
       Static:
-        `u`: ti.field(dtype=[float], shape=[Nx+2, Ny+2]) which we want to 
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) which we want to 
           differentiate.
         `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
@@ -114,43 +117,42 @@ def morphological(
           DOI:10.1137/15M1018460.
     """
     δ = ti.math.sqrt(2) - 1 # Good value for rotation invariance according to M. Welk and J. Weickert (2021)
-    I_shift = ti.Vector([1, 1], dt=ti.i32)
     I_dx = ti.Vector([1, 0], dt=ti.i32)
     I_dy = ti.Vector([0, 1], dt=ti.i32)
     I_dplus = I_dx + I_dy  # Positive diagonal
     I_dminus = I_dx - I_dy # Negative diagonal
-    for I_unshifted in ti.grouped(dilation_u):
-        I = I_unshifted + I_shift # Account for the padding.
+    for I in ti.grouped(dilation_u):
 
-        d_dx_forward = u[I + I_dx] - u[I]
-        d_dx_backward = u[I] - u[I - I_dx]
-        d_dy_forward = u[I + I_dy] - u[I]
-        d_dy_backward = u[I] - u[I - I_dy]
-        d_dplus_forward = u[I + I_dplus] - u[I]
-        d_dplus_backward = u[I] - u[I - I_dplus]
-        d_dminus_forward = u[I + I_dminus] - u[I]
-        d_dminus_backward = u[I] - u[I - I_dminus]
+        # We are on the grid, so interpolation is unnecessary, but I was lazy.
+        d_dx_forward = index_reflected(u, I + I_dx) - u[I]
+        d_dx_backward = u[I] - index_reflected(u, I - I_dx)
+        d_dy_forward = index_reflected(u, I + I_dy) - u[I]
+        d_dy_backward = u[I] - index_reflected(u, I - I_dy)
+        d_dplus_forward = index_reflected(u, I + I_dplus) - u[I]
+        d_dplus_backward = u[I] - index_reflected(u, I - I_dplus)
+        d_dminus_forward = index_reflected(u, I + I_dminus) - u[I]
+        d_dminus_backward = u[I] - index_reflected(u, I - I_dminus)
 
         # Dilation
         ## Axial
-        dilation_u[I_unshifted] = (1 - δ) / dxy * ti.math.sqrt(
+        dilation_u[I] = (1 - δ) / dxy * ti.math.sqrt(
             select_upwind_derivative_dilation(d_dx_forward, d_dx_backward)**2 +
             select_upwind_derivative_dilation(d_dy_forward, d_dy_backward)**2
         )
         ## Diagonal
-        dilation_u[I_unshifted] += δ / (ti.math.sqrt(2) * dxy) * ti.math.sqrt(
+        dilation_u[I] += δ / (ti.math.sqrt(2) * dxy) * ti.math.sqrt(
             select_upwind_derivative_dilation(d_dplus_forward, d_dplus_backward)**2 +
             select_upwind_derivative_dilation(d_dminus_forward, d_dminus_backward)**2
         )
 
         # Erosion
         ## Axial
-        erosion_u[I_unshifted] = -(1 - δ) / dxy * ti.math.sqrt(
+        erosion_u[I] = -(1 - δ) / dxy * ti.math.sqrt(
             select_upwind_derivative_erosion(d_dx_forward, d_dx_backward)**2 +
             select_upwind_derivative_erosion(d_dy_forward, d_dy_backward)**2
         )
         ## Diagonal
-        erosion_u[I_unshifted] -= δ / (ti.math.sqrt(2) * dxy) * ti.math.sqrt(
+        erosion_u[I] -= δ / (ti.math.sqrt(2) * dxy) * ti.math.sqrt(
             select_upwind_derivative_erosion(d_dplus_forward, d_dplus_backward)**2 +
             select_upwind_derivative_erosion(d_dminus_forward, d_dminus_backward)**2
         )

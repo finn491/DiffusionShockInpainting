@@ -80,17 +80,13 @@ def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
 
     # Initialise TaiChi objects
     shape = u0_np.shape
-    Nx, Ny = shape
-    u0 = ti.field(dtype=ti.f32, shape=shape)
-    u0.from_numpy(u0_np)
     mask = ti.field(dtype=ti.f32, shape=shape)
     mask.from_numpy(mask_np)
     du_dt = ti.field(dtype=ti.f32, shape=shape)
 
     ## Padded versions for derivatives
-    u = ti.field(dtype=ti.f32, shape=(Nx + 2, Ny + 2))
-    fill_padded_u(u0, u)
-    fix_reflected_padding(u, 1)
+    u = ti.field(dtype=ti.f32, shape=shape)
+    u.from_numpy(u0_np)
     ### Laplacian
     laplacian_u = ti.field(dtype=ti.f32, shape=shape)
     ### Morphological
@@ -129,12 +125,9 @@ def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
         morphological(u, dxy, dilation_u, erosion_u)
         # Step
         step_DS_filter(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
-        # Correct boundary conditions
-        ## For derivatives
-        fix_reflected_padding(u, 1)
-        ## For switches
+        # Update fields for switches
         fill_u_switch(u, u_switch)
-    return unpad_array(u.to_numpy(), pad_shape=1), switch_DS.to_numpy(), switch_morph.to_numpy()
+    return u.to_numpy(), switch_DS.to_numpy(), switch_morph.to_numpy()
 
 def compute_timestep(dxy, δ=np.sqrt(2)-1):
     """
@@ -202,12 +195,11 @@ def step_DS_filter(
         `erosion_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of -||grad `u`||,
           which is updated in place.
       Mutated:
-        `u`: ti.field(dtype=[float], shape=[Nx+2, Ny+2]) which we want to evolve
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) which we want to evolve
           with the DS PDE.
         `du_dt`: ti.field(dtype=[float], shape=[Nx, Ny]) change in `u` in a
           single time step, not taking into account the mask.
     """
-    I_shift = ti.Vector([1, 1], dt=ti.i32)
     for I in ti.grouped(du_dt):
         du_dt[I] = (
             laplacian_u[I] * switch_DS[I] +
@@ -218,57 +210,10 @@ def step_DS_filter(
                 dilation_u[I] * (switch_morph[I] < 0.) * ti.abs(switch_morph[I])
             )
         )
-        u[I + I_shift] += dt * du_dt[I] * (1 - mask[I]) # Only change values in the mask.
+        u[I] += dt * du_dt[I] * (1 - mask[I]) # Only change values in the mask.
         
 
 # Fix padding function
-        
-@ti.kernel
-def fix_reflected_padding(
-    u: ti.template(),
-    radius: ti.i32
-):
-    """
-    @taichi.kernel
-
-    Repad so that to satisfy reflected boundary conditions.
-    
-    Args:
-      Mutated:
-        `u`: ti.field(dtype=[float], shape=[Nx+2*`radius`, Ny+2*`radius`]) to be
-          repadded, updated in place.
-    """
-    I, J = u.shape
-    for i in range(I):
-        for k in range(radius):
-            u[i, k] = u[i, 2 * radius - k] # u[i, radius]
-            u[i, J-1 - k] = u[i, J-1 - 2 * radius + k] # u[i, J-1 - radius]
-    for j in range(J):
-        for k in range(radius):
-            u[k, j] = u[2 * radius - k, j] # u[radius, j]
-            u[I-1 - k, j] = u[I-1 - 2 * radius + k, j] # u[I-1 - radius, j]
-
-@ti.kernel
-def fill_padded_u(
-    u: ti.template(),
-    padded_u: ti.template()
-):
-    """
-    @taichi.kernel
-
-    Update the content of the field used to determine the switch.
-
-    Args:
-      Static:
-        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) content to fill
-          `padded_u`.
-      Mutated:
-        `padded_u`: ti.field(dtype=[float], shape=[Nx+2, Ny+2]) padded array,
-          updated in place.
-    """
-    I_shift = ti.Vector([1, 1], ti.i32)
-    for I in ti.grouped(u):
-        padded_u[I + I_shift] = u[I]
 
 @ti.kernel
 def fill_u_switch(
@@ -283,11 +228,10 @@ def fill_u_switch(
     Args:
       Static:
         `u`: ti.field(dtype=[float], shape=[Nx, Ny]) content to fill
-          `padded_u`.
+          `u_switch`.
       Mutated:
-        `u_switch`: ti.field(dtype=[float], shape=[Nx+2, Ny+2]) padded array,
+        `u_switch`: ti.field(dtype=[float], shape=[Nx, Ny]) storage array,
           updated in place.
     """
-    I_shift = ti.Vector([1, 1], ti.i32)
     for I in ti.grouped(u_switch):
-        u_switch[I] = u[I + I_shift]
+        u_switch[I] = u[I]

@@ -30,7 +30,7 @@ from dsfilter.utils import (
 @ti.kernel
 def laplacian(
     u_padded: ti.template(),
-    G_inv: ti.vector(),
+    G_inv: ti.types.vector(3, ti.f32),
     dxy: ti.f32,
     dθ: ti.f32,
     θs: ti.template(),
@@ -46,8 +46,8 @@ def laplacian(
       Static:
         `u_padded`: ti.field(dtype=[float], shape=[Nx+2, Ny+2, Nθ]) u padded
           with reflecting boundaries.
-        `G`: ti.types.vector(n=3, dtype=[float]) constants of diagonal metric
-          tensor with respect to left invariant basis.
+        `G_inv`: ti.types.vector(n=3, dtype=[float]) constants of the inverse of
+          the diagonal metric tensor with respect to left invariant basis.
         `θs`: angle coordinate at each grid point.
         `dxy`: step size in x and y direction, taking values greater than 0.
         `dθ`: step size in orientational direction, taking values greater than
