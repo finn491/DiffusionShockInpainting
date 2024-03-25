@@ -2,7 +2,7 @@
     derivatives
     ===========
 
-    Provides a variety of derivative operators on R^2, namely:
+    Provides a variety of derivative operators on SE(2), namely:
       1. `laplacian`: computes an approximation to the Laplacian with good
       rotation invariance, see Eq. (9) of [1] by K. Schaefer and J. Weickert.
       2. `morphological`: computes approximations to the dilation and erosion
@@ -17,7 +17,10 @@
 """
 
 import taichi as ti
-from dsfilter.R2.utils import sanitize_index
+from dsfilter.SE2.utils import (
+    sanitize_index,
+    scalar_trilinear_interpolate
+)
 from dsfilter.utils import (
     select_upwind_derivative_dilation,
     select_upwind_derivative_erosion
@@ -27,23 +30,30 @@ from dsfilter.utils import (
 @ti.kernel
 def laplacian(
     u_padded: ti.template(),
+    G_inv: ti.vector(),
     dxy: ti.f32,
+    dθ: ti.f32,
+    θs: ti.template(),
     laplacian_u: ti.template()
 ):
     """
     @taichi.kernel
 
-    Compute an approximation of the Laplacian of `u` using axial and diagonal
-    central differences, as described by by K. Schaefer and J. Weickert in
-    Eq. (9) of [1].
+    Compute an approximation of the Laplace-Beltrami operator applied to `u`
+    using central differences.
 
     Args:
       Static:
-        `u_padded`: ti.field(dtype=[float], shape=[Nx+2, Ny+2]) u padded with
-          reflecting boundaries.
+        `u_padded`: ti.field(dtype=[float], shape=[Nx+2, Ny+2, Nθ]) u padded
+          with reflecting boundaries.
+        `G`: ti.types.vector(n=3, dtype=[float]) constants of diagonal metric
+          tensor with respect to left invariant basis.
+        `θs`: angle coordinate at each grid point.
         `dxy`: step size in x and y direction, taking values greater than 0.
+        `dθ`: step size in orientational direction, taking values greater than
+          0.
       Mutated:
-        `laplacian_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of laplacian of
+        `laplacian_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) laplacian of
           u, which is updated in place.
 
     References:
@@ -52,36 +62,25 @@ def laplacian(
           in Computer Vision 14009 (2023), pp. 588--600.
           DOI:10.1137/15M1018460.
     """
-    δ = ti.math.sqrt(2) - 1 # Good value for rotation invariance according to M. Welk and J. Weickert (2021)
-    I_shift = ti.Vector([1, 1], dt=ti.i32)
-    I_dx = ti.Vector([1, 0], dt=ti.i32)
-    I_dy = ti.Vector([0, 1], dt=ti.i32)
-    I_dplus = I_dx + I_dy  # Positive diagonal
-    I_dminus = I_dx - I_dy # Negative diagonal
-    for I_unshifted in ti.grouped(laplacian_u):
-        I = I_unshifted + I_shift # Account for the padding.
-        # Axial Stencil
-        # 0 |  1 | 0
-        # 1 | -4 | 1
-        # 0 |  1 | 0
-        laplacian_u[I_unshifted] = (1 - δ) / dxy**2 * (
-            -4 * u_padded[I] +
-            u_padded[I + I_dx] +
-            u_padded[I - I_dx] +
-            u_padded[I + I_dy] +
-            u_padded[I - I_dy]
-        )
-        # Diagonal Stencil
-        # 1 |  0 | 1
-        # 0 | -4 | 0
-        # 1 |  0 | 1
-        laplacian_u[I_unshifted] += δ / (2 * dxy**2) * (
-            -4 * u_padded[I] +
-            u_padded[I + I_dplus] +
-            u_padded[I - I_dplus] +
-            u_padded[I + I_dminus] +
-            u_padded[I - I_dminus]
-        )
+    I_A3 = ti.Vector([0.0,  0.0, 1.0], dt=ti.f32)
+    for I in ti.grouped(laplacian_u):
+        θ = θs[I]
+        cos = ti.math.cos(θ)
+        sin = ti.math.sin(θ)
+        I_A1 = ti.Vector([cos, sin, 0.0], dt=ti.f32)
+        I_A2 = ti.Vector([-sin, cos, 0.0], dt=ti.f32)
+
+        A11 = (scalar_trilinear_interpolate(u_padded, I + I_A1) -
+               2 * u_padded[I] +
+               scalar_trilinear_interpolate(u_padded, I - I_A1)) / dxy**2
+        A22 = (scalar_trilinear_interpolate(u_padded, I + I_A2) -
+               2 * u_padded[I] +
+               scalar_trilinear_interpolate(u_padded, I - I_A2)) / dxy**2
+        A33 = (scalar_trilinear_interpolate(u_padded, I + I_A3) -
+               2 * u_padded[I] +
+               scalar_trilinear_interpolate(u_padded, I - I_A3)) / dθ**2
+        # Δu = div(grad(u)) = A_i (g^ij A_j u) = g^ij A_i A_j u
+        laplacian_u[I] = G_inv[0] * A11 + G_inv[1] * A22 + G_inv[2] * A33
 
 @ti.kernel
 def morphological(
@@ -93,18 +92,18 @@ def morphological(
     """
     @taichi.kernel
 
-    Compute an approximation of the ||grad `u`|| using axial and diagonal upwind
-    differences, as by K. Schaefer and J. Weickert in Eq. (12) of [1].
+    Compute upwind approximations of the morphological derivatives
+    +/- ||grad `u`||.
 
     Args:
       Static:
-        `u`: ti.field(dtype=[float], shape=[Nx+2, Ny+2]) which we want to 
+        `u`: ti.field(dtype=[float], shape=[Nx+2, Ny+2, Nθ]) which we want to 
           differentiate.
         `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
-        `dilation_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of ||grad `u`||,
+        `dilation_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) ||grad `u`||,
           which is updated in place.
-        `erosion_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of -||grad `u`||,
+        `erosion_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) -||grad `u`||,
           which is updated in place.
           
     References:
