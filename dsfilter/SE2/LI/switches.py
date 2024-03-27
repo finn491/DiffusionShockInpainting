@@ -112,10 +112,14 @@ def morphological_switch(
     dxy: ti.f32,
     θs: ti.template(),
     ε: ti.f32,
-    k_s: ti.template(),
-    radius_s: ti.i32,
-    k_o: ti.template(),
-    radius_o: ti.i32,
+    k_int_s: ti.template(),
+    radius_int_s: ti.i32,
+    k_int_o: ti.template(),
+    radius_int_o: ti.i32,
+    k_ext_s: ti.template(),
+    radius_ext_s: ti.i32,
+    k_ext_o: ti.template(),
+    radius_ext_o: ti.i32,
     laplace_perp_u: ti.template(),
     switch: ti.template(),
     convolution_storage_1: ti.template(),
@@ -134,13 +138,21 @@ def morphological_switch(
         `θs`: angle coordinate at each grid point.
         `ε`: regularisation parameter for the signum function used to switch
           between dilation and erosion, taking values greater than 0.
-        `k_s`: ti.field(dtype=[float], shape=2*`radius_s`+1) Gaussian kernel
+        `k_int_s`: ti.field(dtype=[float], shape=2*`radius_s`+1) Gaussian kernel
           used for spatial regularisation.
-        `radius_s`: radius at which kernel `k_s` is truncated, taking
+        `radius_int_s`: radius at which kernel `k_s` is truncated, taking
           integer values greater than 0.
-        `k_o`: ti.field(dtype=[float], shape=2*`radius_o`+1) Gaussian kernel
+        `k_int_o`: ti.field(dtype=[float], shape=2*`radius_o`+1) Gaussian kernel
           used for orientational regularisation.
-        `radius_o`: radius at which kernel `k_ext` is truncated, taking
+        `radius_int_o`: radius at which kernel `k_ext` is truncated, taking
+          integer values greater than 0.
+        `k_ext_s`: ti.field(dtype=[float], shape=2*`radius_s`+1) Gaussian kernel
+          used for spatial regularisation.
+        `radius_ext_s`: radius at which kernel `k_s` is truncated, taking
+          integer values greater than 0.
+        `k_ext_o`: ti.field(dtype=[float], shape=2*`radius_o`+1) Gaussian kernel
+          used for orientational regularisation.
+        `radius_ext_o`: radius at which kernel `k_ext` is truncated, taking
           integer values greater than 0.
       Mutated:
         `laplace_perp_u`: ti.field(dtype=ti.f32, shape=[Nx, Ny, Nθ])
@@ -161,10 +173,14 @@ def morphological_switch(
           DOI:10.48550/arXiv.2309.08761.
     """
     # First regularise with Gaussian convolution.
-    convolve_with_kernel_x_dir(u, k_s, radius_s, convolution_storage_1)
-    convolve_with_kernel_y_dir(convolution_storage_1, k_s, radius_s, convolution_storage_2)
-    convolve_with_kernel_θ_dir(convolution_storage_2, k_o, radius_o, switch)
+    convolve_with_kernel_x_dir(u, k_int_s, radius_int_s, convolution_storage_1)
+    convolve_with_kernel_y_dir(convolution_storage_1, k_int_s, radius_int_s, convolution_storage_2)
+    convolve_with_kernel_θ_dir(convolution_storage_2, k_int_o, radius_int_o, switch)
     # Then compute perpendicular gradient, which is a measure for lineness.
     laplace_perp(switch, dxy, θs, laplace_perp_u)
+    # Finally externally regularise
+    convolve_with_kernel_x_dir(laplace_perp_u, k_ext_s, radius_ext_s, convolution_storage_1)
+    convolve_with_kernel_y_dir(convolution_storage_1, k_ext_s, radius_ext_s, convolution_storage_2)
+    convolve_with_kernel_θ_dir(convolution_storage_2, k_ext_o, radius_ext_o, laplace_perp_u)
     for I in ti.grouped(switch):
         switch[I] = (ε > 0.) * S_ε(laplace_perp_u[I], ε) + (ε == 0.) * ti.math.sign(laplace_perp_u[I])
