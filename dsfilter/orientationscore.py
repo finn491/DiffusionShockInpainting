@@ -71,7 +71,7 @@ def radial_grid(N_spatial):
     xs, ys = np.meshgrid(np.arange(N_spatial), np.arange(N_spatial), indexing="ij")
     dxs = xs - centerx
     dys = ys - centery
-    rs = (np.sqrt(dxs**2 + dys**2) + np.finfo(np.float64).eps) / ((N_spatial - 1) / 2)
+    rs = 2 * np.sqrt(dxs**2 + dys**2) / N_spatial #  + np.finfo(np.float64).eps)
     return rs
 
 def radial_window(N_spatial, n, inflection_point):
@@ -83,10 +83,11 @@ def radial_window(N_spatial, n, inflection_point):
     "Perceptual Organization in Image Analysis" (2005).
     """
     ε = np.finfo(np.float64).eps
-    po_matrix = ε + radial_grid(N_spatial) / np.sqrt(2 * inflection_point**2 / (1 + 2 * n))
-    s = np.zeros_like(po_matrix)
+    ρ_matrix = ε + radial_grid(N_spatial) / np.sqrt(2 * inflection_point**2 / (1 + 2 * n))
+    s = np.zeros_like(ρ_matrix)
+    exp_ρ_squared = np.exp(-ρ_matrix**2)
     for k in range(n + 1):
-        s = s + np.exp(-po_matrix**2) * po_matrix**(2*k) / sp.special.factorial(k)
+        s = s + exp_ρ_squared * ρ_matrix**(2*k) / sp.special.factorial(k)
     return s
 
 def B_spline_matrix(n, x):
@@ -104,7 +105,7 @@ def B_spline_matrix(n, x):
     coeffs = []
     for k in range(n + 2):
         binom_cof = sp.special.binom(n + 1, k)
-        coeffs.append(binom_cof * (x + (n + 1) / 2 - k) ** (n + 1 - 1) * (-1)**k)
+        coeffs.append(binom_cof * (x + (n + 1) / 2 - k) ** n * (-1)**k)
 
     r = 0
     for i in np.arange(-n/2, n/2 + 1):
@@ -116,11 +117,11 @@ def B_spline_matrix(n, x):
             s += coeffs[k] * sign
 
         f = s / (2 * sp.special.factorial(n))
-        ic = np.heaviside((x - (i - 1/2 + ε)), 1) * np.heaviside(-(x - (i + 1/2 - ε*(i>=n/2))), 1)
-        r += f * np.round(ic)
+        interval_check = (x >= (i - 1/2 + ε)) * (x <= (i + 1/2 - ε * (i >= n / 2)))                     
+        r += f * np.round(interval_check)
     return r
 
-def cakewavelet_stack_fourier(N_spatial, dθ, spline_order, overlap_factor, inflection_point, mn_order, DC_σ):
+def cakewavelet_stack_fourier(N_spatial, dθ, spline_order, overlap_factor, inflection_point, mn_order):
     """
     Compute the cakewavelets in the Fourier domain.
 
@@ -142,21 +143,20 @@ def cakewavelet_stack_fourier(N_spatial, dθ, spline_order, overlap_factor, infl
           DC component, such that the cakewavelets can be constructed around
           the origin in the Fourier domain.
     """
-    DC_window = np.ones((N_spatial, N_spatial)) - Gauss_window(N_spatial, DC_σ) 
     mn_window = radial_window(N_spatial, mn_order, inflection_point)
-    window = DC_window * mn_window
+    window =  mn_window
     angle_grid = angular_grid(N_spatial)
     dθ_overlapped = dθ / overlap_factor
     s = 2 * np.pi
     θs = np.arange(0, s, dθ_overlapped)
-    filters = np.zeros((θs.shape[0] + 1, N_spatial, N_spatial))
+    filters = np.zeros((θs.shape[0], N_spatial, N_spatial))
     for i, θ in enumerate(θs):
         x = mod_offset(angle_grid - θ - np.pi / 2, 2 * np.pi, -np.pi) / dθ
-        filters[i, ...] = window * B_spline_matrix(spline_order, x) / overlap_factor   
-    filters[-1, ...] = 1 - DC_window
+        filters[i] = window * B_spline_matrix(spline_order, x)
     return filters
 
-def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.9, mn_order=10, spline_order=3, overlap_factor=1, DC_σ_factor=5):
+def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_order=3, overlap_factor=1,
+                      Gaussian_σ=None):
     """
     Compute the cakewavelets in the Fourier domain.
 
@@ -168,65 +168,73 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.9, mn_order=10, spline_
         `inflection_point`: point at which the radial window M_N starts to
           decrease, taking values at most 1. By increasing this will improve the
           stability of the reconstruction, but the L^1 norm of the cakewavelets
-          will also increase. Defaults to 0.9.
+          will also increase. Defaults to 0.8
         `mn_order`: order at which the geometric sum in the radial window is
           truncated. Defaults to 10.
         `spline_order`: degree of the B-splines. Defaults to 3.
         `overlap_factor`: degree to which adjacent slices overlap in the
           angular direction. When `overlap_factor` is larger than 1, then
           multiple wavelets will cover the same angles. Defaults to 1.
-        `DC_σ_factor`: factor used to determine the standard deviation of the
-          high pass filter used to remove the DC component, such that the
-          cakewavelets can be constructed around the origin in the Fourier
-          domain. Defaults to 5.
+        `Gaussian_σ`: standard deviation of the Gaussian window that is applied
+          to remove the long tails of the cakewavelets. Defaults to
+          (`N_spatial` - 1) / 4.
     """
+    # Set default values
+    if Gaussian_σ is None:
+        Gaussian_σ = N_spatial / 4
     dθ = 2 * np.pi / Nθ
-    DC_σ = 1 / (dθ * DC_σ_factor)
-    filters = cakewavelet_stack_fourier(N_spatial, dθ, spline_order, overlap_factor, inflection_point, mn_order, DC_σ)
-    
-    cake_fourier = filters[:-1, ...]
-    dc_filter = filters[-1, ...]
+    cake_fourier = cakewavelet_stack_fourier(N_spatial, dθ, spline_order, overlap_factor, inflection_point, mn_order)
+
+    cake_fourier[:, (N_spatial//2 - 1):(N_spatial//2 + 2), (N_spatial//2 - 1):(N_spatial//2 + 2)] = dθ / (2 * np.pi)
 
     cake = np.zeros_like(cake_fourier, dtype=np.complex_)
     rotation_amounts = np.array((N_spatial // 2, N_spatial // 2))
+    window = Gauss_window(N_spatial, Gaussian_σ)
     for i, slice_fourier in enumerate(cake_fourier):
         slice_fourier = rotate_left(slice_fourier, rotation_amounts)
-        slice = np.conj(np.fft.ifftn(slice_fourier))        
+        # Mathematica uses Fourier parameters {a, b} = {0, 1} by default, while
+        # NumPy uses {a, b} = {1, -1}. The inverse Fourier transform is then
+        # given by (http://reference.wolfram.com/language/ref/InverseFourier.html)
+        #   sum_s^n ν_s exp(-2πi b (r - 1) (s - 1) / n) / n^((1 + a)/2).
+        # Hence, Mathematica computes
+        #   sum_s^n ν_s exp(-2πi (r - 1) (s - 1) / n) / n^(1/2),
+        # while NumPy computes
+        #   sum_s^n ν_s exp(2πi (r - 1) (s - 1) / n) / n.
+        # Therefore, we can get Mathematica's result by conjugating and
+        # multiplying by n^(1/2).
+        slice = np.conj(np.fft.ifftn(slice_fourier)) * N_spatial
         slice = rotate_right(slice, rotation_amounts)
-        cake[i, ...] = slice
-    cake = np.vstack((cake, np.conj(cake)))
-    
-    dc_filter = rotate_left(dc_filter, rotation_amounts)
-    dc_filter = np.fft.ifftn(dc_filter).real # dcFilter is real
-    dc_filter = rotate_right(dc_filter, rotation_amounts)
+        cake[i] = slice * window
 
-    return cake, dc_filter
+    return cake
     
 def wavelet_transform(f, kernels):
     """
     Return the real part of the wavelet transform of image `f` under the
     `kernels`.
     """
-    ost = np.zeros((kernels.shape[0], f.shape[0], f.shape[1]))
-    f_hat = np.fft.fftn(f)
+    N_spatial = f.shape[0]
+    ost = np.zeros((kernels.shape[0], N_spatial, N_spatial))
+    f_hat = np.fft.fftn(f) / N_spatial
     rotation_amount = np.ceil(0.1 + np.array(f.shape) / 2).astype(int) # Why?
     for i, ψ_θ in enumerate(kernels):
-        ψ_θ_hat = np.fft.fftn(ψ_θ)
-        U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat).real
+        ψ_θ_hat = np.fft.fftn(ψ_θ) / N_spatial
+        U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat).real * N_spatial
         U_θ_hat = rotate_right(U_θ_hat, rotation_amount)
-        ost[i, ...] = U_θ_hat
+        ost[i] = U_θ_hat
     return ost
 
 def wavelet_transform_complex(f, kernels):
     """
     Return the wavelet transform of image `f` under the `kernels`.
     """
-    ost = np.zeros((kernels.shape[0], f.shape[0], f.shape[1]), dtype=np.complex_)
-    f_hat = np.fft.fftn(f)
+    N_spatial = f.shape[0]
+    ost = np.zeros((kernels.shape[0], N_spatial, N_spatial), dtype=np.complex_)
+    f_hat = np.fft.fftn(f) / N_spatial
     rotation_amount = np.ceil(0.1 + np.array(f.shape) / 2).astype(int) # Why?
     for i, ψ_θ in enumerate(kernels):
-        ψ_θ_hat = np.fft.fftn(ψ_θ)
-        U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat)
+        ψ_θ_hat = np.fft.fftn(ψ_θ) / N_spatial
+        U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat) * N_spatial
         U_θ_hat = rotate_right(U_θ_hat, rotation_amount)
-        ost[i, ...] = U_θ_hat
+        ost[i] = U_θ_hat
     return ost

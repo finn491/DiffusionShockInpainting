@@ -56,7 +56,7 @@ def sanitize_reflected_index(
         ti.types.vector(n=3, dtype=ti.i32) of index that is within `input`.
     """
     I, J, K = index
-    I_max, J_max, K_max = ti.Vector(ti.static(input.shape), dt=ti.i32) - ti.Vector([1, 1], dt=ti.i32)
+    I_max, J_max, K_max = ti.Vector(ti.static(input.shape), dt=ti.i32) - ti.Vector([1, 1, 1], dt=ti.i32)
     return ti.Vector([
         -I * (I < 0) + I * (0 <= I <= I_max) + (2 * I_max - I) * (I > I_max),
         -J * (J < 0) + J * (0 <= J <= J_max) + (2 * J_max - J) * (J > J_max),

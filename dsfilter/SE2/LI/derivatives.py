@@ -137,7 +137,7 @@ def morphological(
             G_inv[2] * select_upwind_derivative_erosion(A3_forward, A3_backward)**2
         )
 
-@ti.kernel
+@ti.func
 def gradient_perp(
     u: ti.template(),
     dxy: ti.f32,
@@ -145,7 +145,7 @@ def gradient_perp(
     gradient_perp_u: ti.template()
 ):
     """
-    @taichi.kernel
+    @taichi.func
 
     Compute an approximation of the perpendicular gradient of `u` using central
     differences.
@@ -176,7 +176,7 @@ def gradient_perp(
             scalar_trilinear_interpolate(u, I + I_A2) - scalar_trilinear_interpolate(u, I - I_A2)
         ) / (2 * dxy)
 
-@ti.kernel
+@ti.func
 def laplace_perp(
     u: ti.template(),
     dxy: ti.f32,
@@ -184,7 +184,7 @@ def laplace_perp(
     laplace_perp_u: ti.template()
 ):
     """
-    @taichi.kernel
+    @taichi.func
 
     Compute an approximation of the perpendicular laplacian of `u` using central
     differences.

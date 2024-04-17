@@ -23,7 +23,9 @@
 # Access entire backend
 import dsfilter.utils
 import dsfilter.visualisations
+import dsfilter.orientationscore
 import dsfilter.R2
+import dsfilter.SE2
 
 # Most important functions are available at top level
 ## R2

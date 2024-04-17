@@ -93,7 +93,10 @@ def DS_filter(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_s, σ_o, ρ_
           DOI:10.48550/arXiv.2309.08761.
     """
     # Set hyperparameters
-    dt = compute_timestep(dxy)
+    shape = u0_np.shape
+    Nx, Ny, Nθ = shape
+    dθ = 2 * np.pi / Nθ
+    dt = compute_timestep(dxy, dθ, G_D_inv_np, G_S_inv_np)
     n = int(T / dt)
     # We reuse the Gaussian kernels
     k_s_DS, radius_s_DS = gaussian_derivative_kernel(ν_s, 0)
@@ -104,9 +107,6 @@ def DS_filter(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_s, σ_o, ρ_
     k_o_morph_ext, radius_o_morph_ext = gaussian_derivative_kernel(ρ_o, 0)
 
     # Initialise TaiChi objects
-    shape = u0_np.shape
-    Nx, Ny, Nθ = shape
-    dθ = 2 * np.pi / Nθ
     θs = ti.field(ti.f32, shape=shape)
     θs.from_numpy(θs_np)
     G_D_inv = ti.Vector(G_D_inv_np, dt=ti.f32)
@@ -116,7 +116,7 @@ def DS_filter(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_s, σ_o, ρ_
     du_dt = ti.field(dtype=ti.f32, shape=shape)
 
     ## Padded versions for derivatives
-    u = ti.field(dtype=ti.f32, shape=(Nx + 2, Ny + 2, Nθ))
+    u = ti.field(dtype=ti.f32, shape=shape)
     u.from_numpy(u0_np)
     ### Laplacian
     laplacian_u = ti.field(dtype=ti.f32, shape=shape)
@@ -171,10 +171,8 @@ def compute_timestep(dxy, dθ, G_D_inv, G_S_inv):
         timestep, taking values greater than 0.
     """
     τ_D = 1 / ((G_D_inv[0] + G_D_inv[1]) / dxy**2 + G_D_inv[2] / dθ**2)
-    print(f"τ_D = {τ_D}")
     τ_M = 1 / np.sqrt((G_S_inv[0] + G_S_inv[1]) / dxy**2 + G_S_inv[2] / dθ**2)
-    print(f"τ_M = {τ_D}")
-    return min(τ_D, τ_M) # See Theorem 1 in [2].
+    return 0.1 * min(τ_D, τ_M)
 
 
 @ti.kernel
@@ -217,7 +215,6 @@ def step_DS_filter(
         `du_dt`: ti.field(dtype=[float], shape=[Nx, Ny]) change in `u` in a
           single time step, not taking into account the mask.
     """
-    I_shift = ti.Vector([1, 1], dt=ti.i32)
     for I in ti.grouped(du_dt):
         du_dt[I] = (
             laplacian_u[I] * switch_DS[I] +
@@ -228,7 +225,7 @@ def step_DS_filter(
                 dilation_u[I] * (switch_morph[I] < 0.) * ti.abs(switch_morph[I])
             )
         )
-        u[I + I_shift] += dt * du_dt[I] * (1 - mask[I]) # Only change values in the mask.
+        u[I] += dt * du_dt[I] * (1 - mask[I]) # Only change values in the mask.
         
 
 # Fix padding function
