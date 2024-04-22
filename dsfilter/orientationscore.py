@@ -216,7 +216,7 @@ def wavelet_transform(f, kernels):
     N_spatial = f.shape[0]
     ost = np.zeros((kernels.shape[0], N_spatial, N_spatial))
     f_hat = np.fft.fftn(f) / N_spatial
-    rotation_amount = np.ceil(0.1 + np.array(f.shape) / 2).astype(int) # Why?
+    rotation_amount = np.floor(0.1 + np.array(f.shape) / 2).astype(int) # Why?
     for i, ψ_θ in enumerate(kernels):
         ψ_θ_hat = np.fft.fftn(ψ_θ) / N_spatial
         U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat).real * N_spatial
@@ -231,7 +231,7 @@ def wavelet_transform_complex(f, kernels):
     N_spatial = f.shape[0]
     ost = np.zeros((kernels.shape[0], N_spatial, N_spatial), dtype=np.complex_)
     f_hat = np.fft.fftn(f) / N_spatial
-    rotation_amount = np.ceil(0.1 + np.array(f.shape) / 2).astype(int) # Why?
+    rotation_amount = np.floor(0.1 + np.array(f.shape) / 2).astype(int) # Why?
     for i, ψ_θ in enumerate(kernels):
         ψ_θ_hat = np.fft.fftn(ψ_θ) / N_spatial
         U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat) * N_spatial

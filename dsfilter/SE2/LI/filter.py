@@ -136,22 +136,40 @@ def DS_filter(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_s, σ_o, ρ_
     laplace_perp_u = ti.field(dtype=ti.f32, shape=shape)
     switch_morph = ti.field(dtype=ti.f32, shape=shape)
 
-    for _ in tqdm(range(n)):
-        # Compute switches
-        DS_switch(u_switch, dxy, θs, k_s_DS, radius_s_DS, k_o_DS, radius_o_DS, λ, gradient_perp_u, switch_DS,
-                  convolution_storage_1, convolution_storage_2)
-        morphological_switch(u_switch, dxy, θs, ε, k_s_morph_int, radius_s_morph_int, k_o_morph_int, radius_o_morph_int,
-                             k_s_morph_ext, radius_s_morph_ext, k_o_morph_ext, radius_o_morph_ext, laplace_perp_u,
-                             switch_morph, convolution_storage_1, convolution_storage_2)
-        # Compute derivatives
-        laplacian(u, G_D_inv, dxy, dθ, θs, laplacian_u)
-        morphological(u, G_S_inv, dxy, dθ, θs, dilation_u, erosion_u)
-        # Step
-        step_DS_filter(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
-        # Step
-        # Update fields for switches
-        fill_u_switch(u, u_switch)
+    preprocessing(u, mask, dt, G_D_inv, dxy, dθ, θs, laplacian_u, n)
+
+    # for _ in tqdm(range(n)):
+    #     # Compute switches
+    #     DS_switch(u_switch, dxy, θs, k_s_DS, radius_s_DS, k_o_DS, radius_o_DS, λ, gradient_perp_u, switch_DS,
+    #               convolution_storage_1, convolution_storage_2)
+    #     morphological_switch(u_switch, dxy, θs, ε, k_s_morph_int, radius_s_morph_int, k_o_morph_int, radius_o_morph_int,
+    #                          k_s_morph_ext, radius_s_morph_ext, k_o_morph_ext, radius_o_morph_ext, laplace_perp_u,
+    #                          switch_morph, convolution_storage_1, convolution_storage_2)
+    #     # Compute derivatives
+    #     laplacian(u, G_D_inv, dxy, dθ, θs, laplacian_u)
+    #     morphological(u, G_S_inv, dxy, dθ, θs, dilation_u, erosion_u)
+    #     # Step
+    #     step_DS_filter(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
+    #     # Step
+    #     # Update fields for switches
+    #     fill_u_switch(u, u_switch)
     return u.to_numpy(), switch_DS.to_numpy(), switch_morph.to_numpy()
+
+def preprocessing(u, mask, dt, G_D_inv, dxy, dθ, θs, laplacian_u, n):
+    G_inv = G_D_inv # ti.Matrix([G_D_inv[0], G_D_inv[0], G_D_inv[2]], dt=ti.f32)
+    for _ in tqdm(range(n)):
+        laplacian(u, G_inv, dxy, dθ, θs, laplacian_u)
+        step_preprocessing(u, mask, dt, laplacian_u)
+
+@ti.kernel
+def step_preprocessing(
+    u: ti.template(),
+    mask: ti.template(),
+    dt: ti.f32,
+    laplacian_u: ti.template()
+):
+    for I in ti.grouped(u):
+        u[I] += dt * laplacian_u[I] * (1 - mask[I])
 
 def compute_timestep(dxy, dθ, G_D_inv, G_S_inv):
     """
@@ -170,10 +188,41 @@ def compute_timestep(dxy, dθ, G_D_inv, G_S_inv):
     Returns:
         timestep, taking values greater than 0.
     """
-    τ_D = 1 / ((G_D_inv[0] + G_D_inv[1]) / dxy**2 + G_D_inv[2] / dθ**2)
-    τ_M = 1 / np.sqrt((G_S_inv[0] + G_S_inv[1]) / dxy**2 + G_S_inv[2] / dθ**2)
-    return 0.1 * min(τ_D, τ_M)
+    τ_D = compute_timestep_diffusion(dxy, dθ, G_D_inv)
+    τ_M = compute_timestep_shock(dxy, dθ, G_S_inv)
+    return min(τ_D, τ_M)
 
+def compute_timestep_diffusion(dxy, dθ, G_D_inv):
+    """
+    Compute timestep to solve Diffusion PDE.
+    
+    Args:
+        `dxy`: step size in x and y direction, taking values greater than 0.
+        `dθ`: step size in θ direction, taking values greater than 0.
+        `G_D_inv_np`: np.ndarray(shape=(3,), dtype=[float]) of constants of the
+          inverse of the diagonal metric tensor with respect to left invariant
+          basis used to define the diffusion.
+    
+    Returns:
+        timestep, taking values greater than 0.
+    """
+    return 1 / (4 * ((G_D_inv[0] + G_D_inv[1]) / dxy**2 + G_D_inv[2] / dθ**2))
+
+def compute_timestep_shock(dxy, dθ, G_S_inv):
+    """
+    Compute timestep to solve Shock PDE.
+    
+    Args:
+        `dxy`: step size in x and y direction, taking values greater than 0.
+        `dθ`: step size in θ direction, taking values greater than 0.
+        `G_S_inv_np`: np.ndarray(shape=(3,), dtype=[float]) of constants of the
+          inverse of the diagonal metric tensor with respect to left invariant
+          basis used to define the shock.
+    
+    Returns:
+        timestep, taking values greater than 0.
+    """
+    return 1 / (np.sqrt((G_S_inv[0] + G_S_inv[1]) / dxy**2 + G_S_inv[2] / dθ**2))
 
 @ti.kernel
 def step_DS_filter(
