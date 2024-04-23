@@ -136,6 +136,11 @@ def morphological(
             G_inv[1] * select_upwind_derivative_erosion(A2_forward, A2_backward)**2 +
             G_inv[2] * select_upwind_derivative_erosion(A3_forward, A3_backward)**2
         )
+        # erosion_u[I] = -ti.math.sqrt(
+        #     G_inv[0] * select_upwind_derivative_dilation(-A1_forward, -A1_backward)**2 +
+        #     G_inv[1] * select_upwind_derivative_dilation(-A2_forward, -A2_backward)**2 +
+        #     G_inv[2] * select_upwind_derivative_dilation(-A3_forward, -A3_backward)**2
+        # )
 
 @ti.func
 def gradient_perp(

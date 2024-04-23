@@ -168,7 +168,7 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
         `inflection_point`: point at which the radial window M_N starts to
           decrease, taking values at most 1. By increasing this will improve the
           stability of the reconstruction, but the L^1 norm of the cakewavelets
-          will also increase. Defaults to 0.8
+          will also increase. Defaults to 0.8.
         `mn_order`: order at which the geometric sum in the radial window is
           truncated. Defaults to 10.
         `spline_order`: degree of the B-splines. Defaults to 3.

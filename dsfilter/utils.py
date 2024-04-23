@@ -54,7 +54,7 @@ def select_upwind_derivative_dilation(
     Returns:
         derivative in the correct direction.
     """
-    return ti.math.max(d_forward, -d_backward, 0) * (-1.)**(-d_forward >= d_backward)
+    return ti.math.max(d_forward, -d_backward, 0) * (-1.)**(d_forward <= -d_backward)
 
 @ti.func
 def select_upwind_derivative_erosion(
