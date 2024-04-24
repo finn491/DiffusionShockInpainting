@@ -138,21 +138,21 @@ def DS_filter(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_s, σ_o, ρ_
 
     preprocessing(u, mask, dt, G_D_inv, dxy, dθ, θs, laplacian_u, n)
 
-    # for _ in tqdm(range(n)):
-    #     # Compute switches
-    #     DS_switch(u_switch, dxy, θs, k_s_DS, radius_s_DS, k_o_DS, radius_o_DS, λ, gradient_perp_u, switch_DS,
-    #               convolution_storage_1, convolution_storage_2)
-    #     morphological_switch(u_switch, dxy, θs, ε, k_s_morph_int, radius_s_morph_int, k_o_morph_int, radius_o_morph_int,
-    #                          k_s_morph_ext, radius_s_morph_ext, k_o_morph_ext, radius_o_morph_ext, laplace_perp_u,
-    #                          switch_morph, convolution_storage_1, convolution_storage_2)
-    #     # Compute derivatives
-    #     laplacian(u, G_D_inv, dxy, dθ, θs, laplacian_u)
-    #     morphological(u, G_S_inv, dxy, dθ, θs, dilation_u, erosion_u)
-    #     # Step
-    #     step_DS_filter(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
-    #     # Step
-    #     # Update fields for switches
-    #     fill_u_switch(u, u_switch)
+    for _ in tqdm(range(n)):
+        # Compute switches
+        DS_switch(u_switch, dxy, θs, k_s_DS, radius_s_DS, k_o_DS, radius_o_DS, λ, gradient_perp_u, switch_DS,
+                  convolution_storage_1, convolution_storage_2)
+        morphological_switch(u_switch, dxy, θs, ε, k_s_morph_int, radius_s_morph_int, k_o_morph_int, radius_o_morph_int,
+                             k_s_morph_ext, radius_s_morph_ext, k_o_morph_ext, radius_o_morph_ext, laplace_perp_u,
+                             switch_morph, convolution_storage_1, convolution_storage_2)
+        # Compute derivatives
+        laplacian(u, G_D_inv, dxy, dθ, θs, laplacian_u)
+        morphological(u, G_S_inv, dxy, dθ, θs, dilation_u, erosion_u)
+        # Step
+        step_DS_filter(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
+        # Step
+        # Update fields for switches
+        fill_u_switch(u, u_switch)
     return u.to_numpy(), switch_DS.to_numpy(), switch_morph.to_numpy()
 
 def preprocessing(u, mask, dt, G_D_inv, dxy, dθ, θs, laplacian_u, n):
