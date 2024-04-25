@@ -175,8 +175,8 @@ def step_DS_filter(
     """
     @taichi.kernel
 
-    Perform a single timestep "Diffusion-Shock Inpainting" (2023) by K.
-    Schaefer and J. Weickert, Eq. (12).
+    Perform a single timestep Diffusion-Shock inpainting according to Eq. (12)
+    in [1] by K. Schaefer and J. Weickert.
 
     Args:
       Static:
@@ -199,6 +199,15 @@ def step_DS_filter(
           with the DS PDE.
         `du_dt`: ti.field(dtype=[float], shape=[Nx, Ny]) change in `u` in a
           single time step, not taking into account the mask.
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
+          Computer Vision 14009 (2023), pp. 588--600.
+          DOI:10.1137/15M1018460.
+        [2]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+          DOI:10.48550/arXiv.2309.08761.
     """
     for I in ti.grouped(du_dt):
         du_dt[I] = (

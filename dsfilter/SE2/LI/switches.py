@@ -190,3 +190,138 @@ def morphological_switch(
     convolve_with_kernel_x_dir(switch, k_ext_s, radius_ext_s, convolution_storage_1)
     convolve_with_kernel_y_dir(convolution_storage_1, k_ext_s, radius_ext_s, convolution_storage_2)
     convolve_with_kernel_θ_dir(convolution_storage_2, k_ext_o, radius_ext_o, switch)
+
+
+# For simplified inpainting
+    
+# Diffusion-Shock
+
+## Switcher
+    
+@ti.kernel
+def DS_switch_simple(
+    u: ti.template(),
+    dxy: ti.f32,
+    θs: ti.template(),
+    k_s: ti.template(),
+    radius_s: ti.i32,
+    λ: ti.f32,
+    gradient_perp_u: ti.template(),
+    switch: ti.template(),
+    convolution_storage: ti.template()
+):
+    """
+    @taichi.kernel
+
+    Determine to what degree we should perform diffusion or shock, as described
+    by K. Schaefer and J. Weickert.[1][2]
+
+    Args:
+      Static:
+        `u`: ti.field(dtype=ti.f32, shape=[Nx, Ny, Nθ]) current state.
+        `dxy`: step size in x and y direction, taking values greater than 0.
+        `θs`: angle coordinate at each grid point.
+        `k_s`: ti.field(dtype=ti.f32, shape=2*`radius_s`+1) Gaussian kernel used
+          for spatial regularisation.
+        `radius_s`: radius at which kernel `k_s` is truncated, taking integer
+          values greater than 0.
+        `λ`: contrast parameter, taking values greater than 0.
+      Mutated:
+        `gradient_perp_u`: ti.field(dtype=ti.f32, shape=[Nx, Ny, Nθ])
+          perpendicular gradient of u, which is updated in place.
+        `switch`: ti.field(dtype=ti.f32, shape=[Nx, Ny, Nθ]) values that
+          determine the degree of diffusion or shock, taking values between 0
+          and 1, which is updated in place.
+        `convolution_storage`: ti.field(dtype=[float], shape=[Nx, Ny]) array to
+        hold intermediate results when performing convolutions.
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods
+          in Computer Vision 14009 (2023), pp. 588--600.
+          DOI:10.1137/15M1018460.
+        [2]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+          DOI:10.48550/arXiv.2309.08761.
+    """
+    # First regularise with Gaussian convolution.
+    convolve_with_kernel_x_dir(u, k_s, radius_s, convolution_storage)
+    convolve_with_kernel_y_dir(convolution_storage, k_s, radius_s, switch)
+    # Then compute perpendicular gradient, which is a measure for lineness.
+    gradient_perp(switch, dxy, θs, gradient_perp_u)
+    for I in ti.grouped(switch):
+        switch[I] = g_scalar(gradient_perp_u[I]**2, λ)
+
+# Morphological
+
+## Switcher
+
+@ti.kernel
+def morphological_switch_simple(
+    u: ti.template(),
+    dxy: ti.f32,
+    θs: ti.template(),
+    ε: ti.f32,
+    k_int_s: ti.template(),
+    radius_int_s: ti.i32,
+    k_ext_s: ti.template(),
+    radius_ext_s: ti.i32,
+    laplace_perp_u: ti.template(),
+    switch: ti.template(),
+    convolution_storage: ti.template()
+):
+    """
+    @taichi.func
+    
+    Determine whether to perform dilation or erosion, as described by
+    K. Schaefer and J. Weickert.[1][2]
+
+    Args:
+      Static:
+        `u`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) current state.
+        `dxy`: step size in x and y direction, taking values greater than 0.
+        `θs`: angle coordinate at each grid point.
+        `ε`: regularisation parameter for the signum function used to switch
+          between dilation and erosion, taking values greater than 0.
+        `k_int_s`: ti.field(dtype=[float], shape=2*`radius_s`+1) Gaussian kernel
+          used for spatial regularisation.
+        `radius_int_s`: radius at which kernel `k_s` is truncated, taking
+          integer values greater than 0.
+        `k_ext_s`: ti.field(dtype=[float], shape=2*`radius_s`+1) Gaussian kernel
+          used for spatial regularisation.
+        `radius_ext_s`: radius at which kernel `k_s` is truncated, taking
+          integer values greater than 0.
+      Mutated:
+        `laplace_perp_u`: ti.field(dtype=ti.f32, shape=[Nx, Ny, Nθ])
+          perpendicular laplacian of u, which is updated in place.
+        `switch`: ti.field(dtype=ti.f32, shape=[Nx, Ny, Nθ]) values that
+          determine the degree of dilation or erosion, taking values between -1
+          and 1, which is updated in place.
+        `convolution_storage`: ti.field(dtype=[float], shape=[Nx, Ny]) array to
+          hold intermediate results when performing convolutions.
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods
+          in Computer Vision 14009 (2023), pp. 588--600.
+          DOI:10.1137/15M1018460.
+        [2]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
+          DOI:10.48550/arXiv.2309.08761.
+    """
+    # First regularise with Gaussian convolution.
+    convolve_with_kernel_x_dir(u, k_int_s, radius_int_s, convolution_storage)
+    convolve_with_kernel_y_dir(convolution_storage, k_int_s, radius_int_s, switch)
+    # Then compute perpendicular gradient, which is a measure for lineness.
+    laplace_perp(switch, dxy, θs, laplace_perp_u)
+    # # Finally externally regularise
+    # convolve_with_kernel_x_dir(laplace_perp_u, k_ext_s, radius_ext_s, convolution_storage_1)
+    # convolve_with_kernel_y_dir(convolution_storage_1, k_ext_s, radius_ext_s, convolution_storage_2)
+    # convolve_with_kernel_θ_dir(convolution_storage_2, k_ext_o, radius_ext_o, laplace_perp_u)
+    # for I in ti.grouped(switch):
+    #     switch[I] = (ε > 0.) * S_ε(laplace_perp_u[I], ε) + (ε == 0.) * ti.math.sign(laplace_perp_u[I])
+    for I in ti.grouped(switch):
+        switch[I] = (ε > 0.) * S_ε(laplace_perp_u[I], ε) + (ε == 0.) * ti.math.sign(laplace_perp_u[I])
+    # Finally externally regularise
+    convolve_with_kernel_x_dir(switch, k_ext_s, radius_ext_s, convolution_storage)
+    convolve_with_kernel_y_dir(convolution_storage, k_ext_s, radius_ext_s, switch)

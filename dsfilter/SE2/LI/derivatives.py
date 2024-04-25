@@ -43,12 +43,6 @@ def laplacian(
       Mutated:
         `laplacian_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) laplacian of
           u, which is updated in place.
-
-    References:
-        [1]: K. Schaefer and J. Weickert.
-          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods
-          in Computer Vision 14009 (2023), pp. 588--600.
-          DOI:10.1137/15M1018460.
     """
     I_A3 = ti.Vector([0.0,  0.0, 1.0], dt=ti.f32)
     for I in ti.grouped(laplacian_u):
@@ -101,12 +95,6 @@ def morphological(
           which is updated in place.
         `erosion_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) -||grad `u`||,
           which is updated in place.
-          
-    References:
-        [1]: K. Schaefer and J. Weickert.
-          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
-          Computer Vision 14009 (2023), pp. 588--600.
-          DOI:10.1137/15M1018460.
     """
     I_A3 = ti.Vector([0.0,  0.0, 1.0], dt=ti.f32)
     for I in ti.grouped(dilation_u):
@@ -136,11 +124,6 @@ def morphological(
             G_inv[1] * select_upwind_derivative_erosion(A2_forward, A2_backward)**2 +
             G_inv[2] * select_upwind_derivative_erosion(A3_forward, A3_backward)**2
         )
-        # erosion_u[I] = -ti.math.sqrt(
-        #     G_inv[0] * select_upwind_derivative_dilation(-A1_forward, -A1_backward)**2 +
-        #     G_inv[1] * select_upwind_derivative_dilation(-A2_forward, -A2_backward)**2 +
-        #     G_inv[2] * select_upwind_derivative_dilation(-A3_forward, -A3_backward)**2
-        # )
 
 @ti.func
 def gradient_perp(
@@ -164,12 +147,6 @@ def gradient_perp(
       Mutated:
         `gradient_perp_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ])
           perpendicular gradient of u, which is updated in place.
-
-    References:
-        [1]: K. Schaefer and J. Weickert.
-          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods
-          in Computer Vision 14009 (2023), pp. 588--600.
-          DOI:10.1137/15M1018460.
     """
     for I in ti.grouped(gradient_perp_u):
         θ = θs[I]
@@ -203,12 +180,6 @@ def laplace_perp(
       Mutated:
         `laplace_perp_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ])
           perpendicular laplacian of u, which is updated in place.
-
-    References:
-        [1]: K. Schaefer and J. Weickert.
-          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods
-          in Computer Vision 14009 (2023), pp. 588--600.
-          DOI:10.1137/15M1018460.
     """
     for I in ti.grouped(laplace_perp_u):
         θ = θs[I]
@@ -220,3 +191,95 @@ def laplace_perp(
             scalar_trilinear_interpolate(u, I + I_A2) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_A2)
         ) / dxy**2
         # Δu = div(grad(u)) = A_i (g^ij A_j u) = g^ij A_i A_j u
+
+# For simplified inpainting
+        
+@ti.kernel
+def laplacian_simple(
+    u: ti.template(),
+    G_inv_11: ti.f32,
+    dxy: ti.f32,
+    θs: ti.template(),
+    laplacian_u: ti.template()
+):
+    """
+    @taichi.kernel
+
+    Compute an approximation of the Laplace-Beltrami operator applied to `u`
+    using central differences.
+
+    Args:
+      Static:
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) which we want to
+          differentiate.
+        `G_inv_11`: 11 component of the inverse of the metric tensor with
+          respect to left invariant basis used to define the diffusion.
+        `dxy`: step size in x and y direction, taking values greater than 0.
+        `dθ`: step size in orientational direction, taking values greater than
+          0.
+        `θs`: angle coordinate at each grid point.
+      Mutated:
+        `laplacian_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) laplacian of
+          u, which is updated in place.
+    """
+    for I in ti.grouped(laplacian_u):
+        θ = θs[I]
+        cos = ti.math.cos(θ)
+        sin = ti.math.sin(θ)
+        I_A1 = ti.Vector([cos, sin, 0.0], dt=ti.f32)
+
+        A11 = (scalar_trilinear_interpolate(u, I + I_A1) -
+               2 * u[I] +
+               scalar_trilinear_interpolate(u, I - I_A1)) / dxy**2
+        # Δu = div(grad(u)) = A_i (g^ij A_j u) = g^ij A_i A_j u
+        laplacian_u[I] = G_inv_11 * A11
+
+@ti.kernel
+def morphological_simple(
+    u: ti.template(),
+    G_inv_11: ti.f32,
+    dxy: ti.f32,
+    θs: ti.template(),
+    dilation_u: ti.template(),
+    erosion_u: ti.template()
+):
+    """
+    @taichi.kernel
+
+    Compute upwind approximations of the morphological derivatives
+    +/- ||grad `u`||.
+
+    Args:
+      Static:
+        `u`: ti.field(dtype=[float], shape=[Nx+2, Ny+2, Nθ]) which we want to 
+          differentiate.
+        `G_inv_11`: 11 component of the inverse of the metric tensor with
+          respect to left invariant basis used to define the shock.
+        `θs`: angle coordinate at each grid point.
+        `dxy`: step size in x and y direction, taking values greater than 0.
+        `dθ`: step size in orientational direction, taking values greater than
+          0.
+      Mutated:
+        `dilation_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) ||grad `u`||,
+          which is updated in place.
+        `erosion_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) -||grad `u`||,
+          which is updated in place.
+    """
+    for I in ti.grouped(dilation_u):
+        θ = θs[I]
+        cos = ti.math.cos(θ)
+        sin = ti.math.sin(θ)
+        I_A1 = ti.Vector([cos, sin, 0.0], dt=ti.f32)
+
+        A1_forward = (scalar_trilinear_interpolate(u, I + I_A1) - u[I]) / dxy
+        A1_backward = (u[I] - scalar_trilinear_interpolate(u, I - I_A1)) / dxy
+
+        # ||grad u|| = sqrt(G(grad u, grad u)) = sqrt(g^ij A_i u A_j u)
+        # Dilation
+        dilation_u[I] = ti.math.sqrt(
+            G_inv_11 * select_upwind_derivative_dilation(A1_forward, A1_backward)**2
+        )
+        # Erosion
+        erosion_u[I] = -ti.math.sqrt(
+            G_inv_11 * select_upwind_derivative_erosion(A1_forward, A1_backward)**2
+        )
