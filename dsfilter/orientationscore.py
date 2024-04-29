@@ -168,7 +168,7 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
         `inflection_point`: point at which the radial window M_N starts to
           decrease, taking values at most 1. By increasing this will improve the
           stability of the reconstruction, but the L^1 norm of the cakewavelets
-          will also increase. Defaults to 0.8.
+          will also increase. Defaults to 0.8
         `mn_order`: order at which the geometric sum in the radial window is
           truncated. Defaults to 10.
         `spline_order`: degree of the B-splines. Defaults to 3.
@@ -181,11 +181,11 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
     """
     # Set default values
     if Gaussian_σ is None:
-        Gaussian_σ = N_spatial / 4
+        Gaussian_σ = (N_spatial - 1) / 4
     dθ = 2 * np.pi / Nθ
     cake_fourier = cakewavelet_stack_fourier(N_spatial, dθ, spline_order, overlap_factor, inflection_point, mn_order)
 
-    cake_fourier[:, (N_spatial//2 - 1):(N_spatial//2 + 2), (N_spatial//2 - 1):(N_spatial//2 + 2)] = dθ / (2 * np.pi)
+    cake_fourier[:, (N_spatial//2 - 2):(N_spatial//2 + 3), (N_spatial//2 - 2):(N_spatial//2 + 3)] = dθ / (2 * np.pi)
 
     cake = np.zeros_like(cake_fourier, dtype=np.complex_)
     rotation_amounts = np.array((N_spatial // 2, N_spatial // 2))
@@ -202,7 +202,9 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
         #   sum_s^n ν_s exp(2πi (r - 1) (s - 1) / n) / n.
         # Therefore, we can get Mathematica's result by conjugating and
         # multiplying by n^(1/2).
-        slice = np.conj(np.fft.ifftn(slice_fourier)) * N_spatial
+        # However, if we use NumPy's convention, we can forget about n when
+        # performing convolutions, so we don't multiply by n^(1/2).
+        slice = np.conj(np.fft.ifftn(slice_fourier))
         slice = rotate_right(slice, rotation_amounts)
         cake[i] = slice * window
 
@@ -215,11 +217,11 @@ def wavelet_transform(f, kernels):
     """
     N_spatial = f.shape[0]
     ost = np.zeros((kernels.shape[0], N_spatial, N_spatial))
-    f_hat = np.fft.fftn(f) / N_spatial
+    f_hat = np.fft.fftn(f)
     rotation_amount = np.floor(0.1 + np.array(f.shape) / 2).astype(int) # Why?
     for i, ψ_θ in enumerate(kernels):
-        ψ_θ_hat = np.fft.fftn(ψ_θ) / N_spatial
-        U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat).real * N_spatial
+        ψ_θ_hat = np.fft.fftn(ψ_θ)
+        U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat).real
         U_θ_hat = rotate_right(U_θ_hat, rotation_amount)
         ost[i] = U_θ_hat
     return ost
@@ -230,11 +232,11 @@ def wavelet_transform_complex(f, kernels):
     """
     N_spatial = f.shape[0]
     ost = np.zeros((kernels.shape[0], N_spatial, N_spatial), dtype=np.complex_)
-    f_hat = np.fft.fftn(f) / N_spatial
+    f_hat = np.fft.fftn(f)
     rotation_amount = np.floor(0.1 + np.array(f.shape) / 2).astype(int) # Why?
     for i, ψ_θ in enumerate(kernels):
-        ψ_θ_hat = np.fft.fftn(ψ_θ) / N_spatial
-        U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat) * N_spatial
+        ψ_θ_hat = np.fft.fftn(ψ_θ)
+        U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat)
         U_θ_hat = rotate_right(U_θ_hat, rotation_amount)
         ost[i] = U_θ_hat
     return ost
