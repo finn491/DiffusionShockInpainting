@@ -182,14 +182,14 @@ def morphological_switch(
     # convolve_with_kernel_x_dir(laplace_perp_u, k_ext_s, radius_ext_s, convolution_storage_1)
     # convolve_with_kernel_y_dir(convolution_storage_1, k_ext_s, radius_ext_s, convolution_storage_2)
     # convolve_with_kernel_θ_dir(convolution_storage_2, k_ext_o, radius_ext_o, laplace_perp_u)
-    # for I in ti.grouped(switch):
-    #     switch[I] = (ε > 0.) * S_ε(laplace_perp_u[I], ε) + (ε == 0.) * ti.math.sign(laplace_perp_u[I])
-    # Finally externally regularise
     for I in ti.grouped(switch):
         switch[I] = (ε > 0.) * S_ε(laplace_perp_u[I], ε) + (ε == 0.) * ti.math.sign(laplace_perp_u[I])
-    convolve_with_kernel_x_dir(switch, k_ext_s, radius_ext_s, convolution_storage_1)
-    convolve_with_kernel_y_dir(convolution_storage_1, k_ext_s, radius_ext_s, convolution_storage_2)
-    convolve_with_kernel_θ_dir(convolution_storage_2, k_ext_o, radius_ext_o, switch)
+    # # Finally externally regularise
+    # for I in ti.grouped(switch):
+    #     switch[I] = (ε > 0.) * S_ε(laplace_perp_u[I], ε) + (ε == 0.) * ti.math.sign(laplace_perp_u[I])
+    # convolve_with_kernel_x_dir(switch, k_ext_s, radius_ext_s, convolution_storage_1)
+    # convolve_with_kernel_y_dir(convolution_storage_1, k_ext_s, radius_ext_s, convolution_storage_2)
+    # convolve_with_kernel_θ_dir(convolution_storage_2, k_ext_o, radius_ext_o, switch)
 
 
 # For simplified inpainting
