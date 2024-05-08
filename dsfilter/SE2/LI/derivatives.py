@@ -129,6 +129,8 @@ def morphological(
 def gradient_perp(
     u: ti.template(),
     dxy: ti.f32,
+    # dθ: ti.f32,
+    # ξ: ti.f32,
     θs: ti.template(),
     gradient_perp_u: ti.template()
 ):
@@ -144,24 +146,36 @@ def gradient_perp(
           differentiate.
         `θs`: angle coordinate at each grid point.
         `dxy`: step size in x and y direction, taking values greater than 0.
+        `dθ`: step size in orientational direction, taking values greater than
+          0.
+        `ξ`: stiffness parameter defining the cost of moving one unit in the
+          orientatonal direction relative to moving one unit in a spatial
+          direction, taking values greater than 0.
       Mutated:
         `gradient_perp_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ])
           perpendicular gradient of u, which is updated in place.
     """
+    I_A3 = ti.Vector([0.0, 0.0, 1.0], dt=ti.f32) / 2
     for I in ti.grouped(gradient_perp_u):
         θ = θs[I]
         cos = ti.math.cos(θ)
         sin = ti.math.sin(θ)
-        I_A2 = ti.Vector([-sin, cos, 0.0], dt=ti.f32)
-        # grad_perp u = A_2 u A_2
-        gradient_perp_u[I] = (
-            scalar_trilinear_interpolate(u, I + I_A2) - scalar_trilinear_interpolate(u, I - I_A2)
-        ) / (2 * dxy)
+        I_A2 = ti.Vector([-sin, cos, 0.0], dt=ti.f32) / 2
+        # ||grad_perp u||^2 = ξ^2 (A_2 u)^2 + (A_3 u)^2
+        gradient_perp_u[I] = ti.math.sqrt((( # ξ**2 * 
+                scalar_trilinear_interpolate(u, I + I_A2) - scalar_trilinear_interpolate(u, I - I_A2)
+            ) / dxy)**2 # +
+            # ((
+            #     scalar_trilinear_interpolate(u, I + I_A3) - scalar_trilinear_interpolate(u, I - I_A3)
+            # ) / dθ)**2
+        )
 
 @ti.func
 def laplace_perp(
     u: ti.template(),
     dxy: ti.f32,
+    # dθ: ti.f32,
+    # ξ: ti.f32,
     θs: ti.template(),
     laplace_perp_u: ti.template()
 ):
@@ -177,19 +191,29 @@ def laplace_perp(
           differentiate.
         `θs`: angle coordinate at each grid point.
         `dxy`: step size in x and y direction, taking values greater than 0.
+        `dθ`: step size in orientational direction, taking values greater than
+          0.
+        `ξ`: stiffness parameter defining the cost of moving one unit in the
+          orientatonal direction relative to moving one unit in a spatial
+          direction, taking values greater than 0.
       Mutated:
         `laplace_perp_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ])
           perpendicular laplacian of u, which is updated in place.
     """
+    I_A3 = ti.Vector([0.0, 0.0, 1.0], dt=ti.f32)
     for I in ti.grouped(laplace_perp_u):
         θ = θs[I]
         cos = ti.math.cos(θ)
         sin = ti.math.sin(θ)
         I_A2 = ti.Vector([-sin, cos, 0.0], dt=ti.f32)
-        # Δ_perp u = A_2 A_2 u
-        laplace_perp_u[I] = (
-            scalar_trilinear_interpolate(u, I + I_A2) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_A2)
-        ) / dxy**2
+        # Δ_perp u = ξ^2 A_2 A_2 u + A_3 A_3 u
+        laplace_perp_u[I] = (( # ξ**2 * 
+                scalar_trilinear_interpolate(u, I + I_A2) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_A2)
+            ) / dxy**2 # +
+            # (
+            #     scalar_trilinear_interpolate(u, I + I_A3) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_A3)
+            # ) / dθ**2
+        )
         # Δu = div(grad(u)) = A_i (g^ij A_j u) = g^ij A_i A_j u
 
 # For simplified inpainting

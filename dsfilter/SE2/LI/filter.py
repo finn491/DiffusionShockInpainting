@@ -18,8 +18,9 @@
       Computer Vision 14009 (2023), pp. 588--600.
       DOI:10.1137/15M1018460.
       [2]: K. Schaefer and J. Weickert.
-      "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
-      DOI:10.48550/arXiv.2309.08761.
+      "Regularised Diffusion-Shock Inpainting". In: Journal of Mathematical
+      Imaging and Vision (2024).
+      DOI:10.1007/s10851-024-01175-0.
 """
 
 import taichi as ti
@@ -94,8 +95,9 @@ def DS_filter(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_s, σ_o, ρ_
           in Computer Vision 14009 (2023), pp. 588--600.
           DOI:10.1137/15M1018460.
         [2]: K. Schaefer and J. Weickert.
-          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
-          DOI:10.48550/arXiv.2309.08761.
+          "Regularised Diffusion-Shock Inpainting". In: Journal of Mathematical
+          Imaging and Vision (2024).
+          DOI:10.1007/s10851-024-01175-0.
     """
     # Set hyperparameters
     shape = u0_np.shape
@@ -141,11 +143,13 @@ def DS_filter(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_s, σ_o, ρ_
     laplace_perp_u = ti.field(dtype=ti.f32, shape=shape)
     switch_morph = ti.field(dtype=ti.f32, shape=shape)
 
+    # ξ = 1.
+
     for _ in tqdm(range(n)):
         # Compute switches
-        DS_switch(u_switch, dxy, θs, k_s_DS, radius_s_DS, k_o_DS, radius_o_DS, λ, gradient_perp_u, switch_DS,
+        DS_switch(u_switch, dxy, θs, k_s_DS, radius_s_DS, k_o_DS, radius_o_DS, λ, gradient_perp_u, switch_DS, # , dθ, ξ
                   convolution_storage_1, convolution_storage_2)
-        morphological_switch(u_switch, dxy, θs, ε, k_s_morph_int, radius_s_morph_int, k_o_morph_int, radius_o_morph_int,
+        morphological_switch(u_switch, dxy, θs, ε, k_s_morph_int, radius_s_morph_int, k_o_morph_int, radius_o_morph_int, # , dθ, ξ
                              k_s_morph_ext, radius_s_morph_ext, k_o_morph_ext, radius_o_morph_ext, laplace_perp_u,
                              switch_morph, convolution_storage_1, convolution_storage_2)
         # Compute derivatives
@@ -257,8 +261,9 @@ def step_DS_filter(
           in Computer Vision 14009 (2023), pp. 588--600.
           DOI:10.1137/15M1018460.
         [2]: K. Schaefer and J. Weickert.
-          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
-          DOI:10.48550/arXiv.2309.08761.
+          "Regularised Diffusion-Shock Inpainting". In: Journal of Mathematical
+          Imaging and Vision (2024).
+          DOI:10.1007/s10851-024-01175-0.
     """
     for I in ti.grouped(du_dt):
         du_dt[I] = (
@@ -391,8 +396,11 @@ def shock_inpainting(u0_np, mask_np, G_inv_np, dxy, dθ, θs_np, σ_s, σ_o, ρ_
     switch = ti.field(dtype=ti.f32, shape=shape)
     convolution_storage_1 = ti.field(dtype=ti.f32, shape=shape)
     convolution_storage_2 = ti.field(dtype=ti.f32, shape=shape)
+
+    # ξ = 1.
+
     for _ in tqdm(range(n)):
-        morphological_switch(u, dxy, θs, ε, k_s_int, radius_s_int, k_o_int, radius_o_int, k_s_ext, radius_s_ext,
+        morphological_switch(u, dxy, θs, ε, k_s_int, radius_s_int, k_o_int, radius_o_int, k_s_ext, radius_s_ext, # , dθ, ξ
                              k_o_ext, radius_o_ext, laplace_perp_U, switch, convolution_storage_1,
                              convolution_storage_2)
         morphological(u, G_inv, dxy, dθ, θs, dilation_U, erosion_U)
@@ -483,8 +491,9 @@ def DS_inpainting_simple(u0_np, mask_np, θs_np, T, G_D_inv_11, G_S_inv_11, σ_s
           in Computer Vision 14009 (2023), pp. 588--600.
           DOI:10.1137/15M1018460.
         [2]: K. Schaefer and J. Weickert.
-          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
-          DOI:10.48550/arXiv.2309.08761.
+          "Regularised Diffusion-Shock Inpainting". In: Journal of Mathematical
+          Imaging and Vision (2024).
+          DOI:10.1007/s10851-024-01175-0.
     """
     # Set hyperparameters
     shape = u0_np.shape
@@ -524,10 +533,12 @@ def DS_inpainting_simple(u0_np, mask_np, θs_np, T, G_D_inv_11, G_S_inv_11, σ_s
     laplace_perp_u = ti.field(dtype=ti.f32, shape=shape)
     switch_morph = ti.field(dtype=ti.f32, shape=shape)
 
+    # ξ = 1.
+
     for _ in tqdm(range(n)):
         # Compute switches
-        DS_switch_simple(u_switch, dxy, θs, k_s_DS, radius_s_DS, λ, gradient_perp_u, switch_DS, convolution_storage)
-        morphological_switch_simple(u_switch, dxy, θs, ε, k_s_morph_int, radius_s_morph_int, k_s_morph_ext,
+        DS_switch_simple(u_switch, dxy, θs, k_s_DS, radius_s_DS, λ, gradient_perp_u, switch_DS, convolution_storage) # , dθ, ξ
+        morphological_switch_simple(u_switch, dxy, θs, ε, k_s_morph_int, radius_s_morph_int, k_s_morph_ext, # , dθ, ξ
                                     radius_s_morph_ext, laplace_perp_u, switch_morph, convolution_storage)
         # Compute derivatives
         laplacian_simple(u, G_D_inv_11, dxy, θs, laplacian_u)

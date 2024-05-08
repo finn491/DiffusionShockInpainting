@@ -13,8 +13,9 @@
       Computer Vision 14009 (2023), pp. 588--600.
       DOI:10.1137/15M1018460.
       [2]: K. Schaefer and J. Weickert.
-      "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
-      DOI:10.48550/arXiv.2309.08761.
+      "Regularised Diffusion-Shock Inpainting". In: Journal of Mathematical
+      Imaging and Vision (2024).
+      DOI:10.1007/s10851-024-01175-0.
 """
 
 import taichi as ti
@@ -63,12 +64,13 @@ def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
 
     References:
         [1]: K. Schaefer and J. Weickert.
-          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
-          Computer Vision 14009 (2023), pp. 588--600.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods
+          in Computer Vision 14009 (2023), pp. 588--600.
           DOI:10.1137/15M1018460.
         [2]: K. Schaefer and J. Weickert.
-          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
-          DOI:10.48550/arXiv.2309.08761.
+          "Regularised Diffusion-Shock Inpainting". In: Journal of Mathematical
+          Imaging and Vision (2024).
+          DOI:10.1007/s10851-024-01175-0.
     """
     # Set hyperparameters
     dt = compute_timestep(dxy)
@@ -148,12 +150,13 @@ def compute_timestep(dxy, δ=np.sqrt(2)-1):
 
     References:
         [1]: K. Schaefer and J. Weickert.
-          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
-          Computer Vision 14009 (2023), pp. 588--600.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods
+          in Computer Vision 14009 (2023), pp. 588--600.
           DOI:10.1137/15M1018460.
         [2]: K. Schaefer and J. Weickert.
-          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
-          DOI:10.48550/arXiv.2309.08761.
+          "Regularised Diffusion-Shock Inpainting". In: Journal of Mathematical
+          Imaging and Vision (2024).
+          DOI:10.1007/s10851-024-01175-0.
     """
     τ_D = dxy**2 / (4 - 2 * δ)
     τ_M = dxy / (np.sqrt(2) * (1 - δ) + δ)
@@ -202,12 +205,13 @@ def step_DS_filter(
 
     References:
         [1]: K. Schaefer and J. Weickert.
-          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
-          Computer Vision 14009 (2023), pp. 588--600.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods
+          in Computer Vision 14009 (2023), pp. 588--600.
           DOI:10.1137/15M1018460.
         [2]: K. Schaefer and J. Weickert.
-          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
-          DOI:10.48550/arXiv.2309.08761.
+          "Regularised Diffusion-Shock Inpainting". In: Journal of Mathematical
+          Imaging and Vision (2024).
+          DOI:10.1007/s10851-024-01175-0.
     """
     for I in ti.grouped(du_dt):
         du_dt[I] = (

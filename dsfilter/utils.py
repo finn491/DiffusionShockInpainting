@@ -98,8 +98,9 @@ def S_ε(
 
     References:
         [1]: K. Schaefer and J. Weickert.
-          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
-          DOI:10.48550/arXiv.2309.08761.
+          "Regularised Diffusion-Shock Inpainting". In: Journal of Mathematical
+          Imaging and Vision (2024).
+          DOI:10.1007/s10851-024-01175-0.
     """
     return (2 / ti.math.pi) * ti.math.atan2(x, ε)
 
@@ -123,8 +124,9 @@ def g_scalar(
 
     References:
         [1]: K. Schaefer and J. Weickert.
-          "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
-          DOI:10.48550/arXiv.2309.08761.
+          "Regularised Diffusion-Shock Inpainting". In: Journal of Mathematical
+          Imaging and Vision (2024).
+          DOI:10.1007/s10851-024-01175-0.
     """
     return 1 / ti.math.sqrt(1 + s_squared / λ**2)
 

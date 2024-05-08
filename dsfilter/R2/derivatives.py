@@ -112,8 +112,8 @@ def morphological(
           
     References:
         [1]: K. Schaefer and J. Weickert.
-          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods in
-          Computer Vision 14009 (2023), pp. 588--600.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods
+          in Computer Vision 14009 (2023), pp. 588--600.
           DOI:10.1137/15M1018460.
     """
     δ = ti.math.sqrt(2) - 1 # Good value for rotation invariance according to M. Welk and J. Weickert (2021)

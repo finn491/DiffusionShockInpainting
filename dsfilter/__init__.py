@@ -16,8 +16,9 @@
       Computer Vision 14009 (2023), pp. 588--600.
       DOI:10.1137/15M1018460.
       [2]: K. Schaefer and J. Weickert.
-      "Regularised Diffusion-Shock Inpainting". arXiv preprint. 
-      DOI:10.48550/arXiv.2309.08761.
+      "Regularised Diffusion-Shock Inpainting". In: Journal of Mathematical
+      Imaging and Vision (2024).
+      DOI:10.1007/s10851-024-01175-0.
 """
 
 # Access entire backend
