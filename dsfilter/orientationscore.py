@@ -21,28 +21,6 @@ def mod_offset(x, period, offset):
     """Compute `x` modulo `period` with offset `offset`."""
     return x - (x - offset)//period * period
 
-def rotate_left(array, k):
-    """Rotate left the columns and rows of `array` by `k`."""
-    return rotate_right(array, -k)
-
-def rotate_right(array, k):
-    """Rotate right the columns and rows of `array` by `k`."""
-    if type(k) == int or type(k) == float:
-        arr1 = array[:-k]
-        arr2 = array[-k:]
-        rotated_array = np.concatenate((arr2, arr1), axis=0)
-    elif len(k) == 2 and len(array.shape) == 2:
-        k_0, k_1 = k
-        arr1 = array[:, :-k_1]
-        arr2 = array[:, -k_1:]
-        array = np.concatenate((arr2, arr1), axis=1)
-        arr1 = array[:-k_0, :]
-        arr2 = array[-k_0:, :]
-        rotated_array = np.concatenate((arr2, arr1), axis=0)
-    else:
-        raise ValueError(f"k = {k} is not a supported point for rotating. k should be a number or a pair of numbers.")
-    return rotated_array
-
 def Gauss_window(N_spatial, σ_s):
     """
     Compute a Gaussian envelope, which can be used as a low pass filter by 
@@ -188,10 +166,10 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
     cake_fourier[:, (N_spatial//2 - 2):(N_spatial//2 + 3), (N_spatial//2 - 2):(N_spatial//2 + 3)] = dθ / (2 * np.pi)
 
     cake = np.zeros_like(cake_fourier, dtype=np.complex_)
-    rotation_amounts = np.array((N_spatial // 2, N_spatial // 2))
+    rotation_amount = np.array((N_spatial // 2, N_spatial // 2))
     window = Gauss_window(N_spatial, Gaussian_σ)
     for i, slice_fourier in enumerate(cake_fourier):
-        slice_fourier = rotate_left(slice_fourier, rotation_amounts)
+        slice_fourier = np.roll(slice_fourier, -rotation_amount, axis=(0, 1)) # rotate left
         # Mathematica uses Fourier parameters {a, b} = {0, 1} by default, while
         # NumPy uses {a, b} = {1, -1}. The inverse Fourier transform is then
         # given by (http://reference.wolfram.com/language/ref/InverseFourier.html)
@@ -205,7 +183,7 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
         # However, if we use NumPy's convention, we can forget about n when
         # performing convolutions, so we don't multiply by n^(1/2).
         slice = np.conj(np.fft.ifftn(slice_fourier))
-        slice = rotate_right(slice, rotation_amounts)
+        slice = np.roll(slice, +rotation_amount, axis=(0, 1)) # rotate right
         cake[i] = slice * window
 
     return cake
@@ -218,11 +196,11 @@ def wavelet_transform(f, kernels):
     N_spatial = f.shape[0]
     ost = np.zeros((kernels.shape[0], N_spatial, N_spatial))
     f_hat = np.fft.fftn(f)
-    rotation_amount = np.floor(0.1 + np.array(f.shape) / 2).astype(int) # Why?
+    rotation_amount = np.ceil(0.1 + np.array(f.shape) / 2).astype(int)
     for i, ψ_θ in enumerate(kernels):
-        ψ_θ_hat = np.fft.fftn(ψ_θ)
+        ψ_θ_hat = np.fft.fftn(np.flip(ψ_θ, axis=(0, 1)))
         U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat).real
-        U_θ_hat = rotate_right(U_θ_hat, rotation_amount)
+        U_θ_hat = np.roll(U_θ_hat, +rotation_amount, axis=(0, 1)) # rotate right
         ost[i] = U_θ_hat
     return ost
 
@@ -233,10 +211,10 @@ def wavelet_transform_complex(f, kernels):
     N_spatial = f.shape[0]
     ost = np.zeros((kernels.shape[0], N_spatial, N_spatial), dtype=np.complex_)
     f_hat = np.fft.fftn(f)
-    rotation_amount = np.floor(0.1 + np.array(f.shape) / 2).astype(int) # Why?
+    rotation_amount = np.ceil(0.1 + np.array(f.shape) / 2).astype(int)
     for i, ψ_θ in enumerate(kernels):
-        ψ_θ_hat = np.fft.fftn(ψ_θ)
+        ψ_θ_hat = np.fft.fftn(np.flip(ψ_θ, axis=(0, 1)))
         U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat)
-        U_θ_hat = rotate_right(U_θ_hat, rotation_amount)
+        U_θ_hat = np.roll(U_θ_hat, +rotation_amount, axis=(0, 1)) # rotate right
         ost[i] = U_θ_hat
     return ost
