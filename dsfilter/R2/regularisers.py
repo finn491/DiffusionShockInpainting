@@ -35,7 +35,7 @@ def convolve_with_kernel_x_dir(
     """
     @taichi.func
     
-    Convolve `u` the 1D kernel `k` in the x-direction.
+    Convolve `u` with the 1D kernel `k` in the x-direction.
 
     Args:
       Static:
@@ -65,7 +65,7 @@ def convolve_with_kernel_y_dir(
     """
     @taichi.func
     
-    Convolve `u` the 1D kernel `k` in the y-direction.
+    Convolve `u` with the 1D kernel `k` in the y-direction.
 
     Args:
       Static:

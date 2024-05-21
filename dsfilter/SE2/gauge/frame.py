@@ -12,7 +12,10 @@ from dsfilter.SE2.utils import scalar_trilinear_interpolate
 from dsfilter.SE2.regularisers import (
     convolve_with_kernel_x_dir,
     convolve_with_kernel_y_dir,
-    convolve_with_kernel_θ_dir
+    convolve_with_kernel_θ_dir,
+    convolve_matrix_3_by_3_with_kernel_x_dir,
+    convolve_matrix_3_by_3_with_kernel_y_dir,
+    convolve_matrix_3_by_3_with_kernel_θ_dir
 )
 
 
@@ -55,18 +58,20 @@ def compute_gauge_frame(
     A3_u: ti.template(),
     H: ti.template(),
     A: ti.template(),
+    V: ti.template(),
     B1: ti.template(),
     B2: ti.template(),
     B3: ti.template(),
     convolution_storage_1: ti.template(),
-    convolution_storage_2: ti.template()
+    convolution_storage_2: ti.template(),
+    convolution_matrix_storage_1: ti.template(),
+    convolution_matrix_storage_2: ti.template()
 ):
     """
-    @taichi.func
+    @taichi.kernel
 
-    Compute an approximation of the Hessian matrix H^i_j `u` = A_j A_i `u`, the
-    components of the Lie-Cartan 0 connection Hessian with respect to the left
-    invariant frame.
+    Compute gauge frame {B1, B2, B3}, with respect to the left invariant frame.
+    TODO: add in reference to some paper; what one has the best explanation?
 
     Args:
       Static:
@@ -96,28 +101,50 @@ def compute_gauge_frame(
         `laplacian_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) laplacian of
           u, which is updated in place.
     """
-    # First regularise with Gaussian convolution.
+    # First regularise internally with Gaussian convolution.
     convolve_with_kernel_x_dir(u, k_int_s, radius_int_s, convolution_storage_1)
     convolve_with_kernel_y_dir(convolution_storage_1, k_int_s, radius_int_s, convolution_storage_2)
     convolve_with_kernel_θ_dir(convolution_storage_2, k_int_o, radius_int_o, u)
     # Then compute Hessian matrix.
     compute_Hessian_matrix(u, dxy, dθ, θs, A1_u, A2_u, A3_u, H)
-    M = ti.Matrix(np.diag((1/ξ, 1/ξ, 1.)), dt=ti.f32)
+    # Finally regularise componentwise externally with Gaussian convolutions.
+    convolve_matrix_3_by_3_with_kernel_x_dir(H, k_ext_s, radius_ext_s, convolution_matrix_storage_1)
+    convolve_matrix_3_by_3_with_kernel_y_dir(convolution_matrix_storage_1, k_ext_s, radius_ext_s, convolution_matrix_storage_2)
+    convolve_matrix_3_by_3_with_kernel_θ_dir(convolution_matrix_storage_2, k_ext_o, radius_ext_o, H)
+    # Make the problem dimensionless:
+    # The spatial directions have dimensions [length], while the orientational
+    # direction is dimensionless. To be able to compare them, we need to make
+    # a choice of metric tensor field. We choose a spatially isotropic metric
+    # tensor field Mξ with stiffness parameter ξ.
+    Mξ = ti.Matrix(np.diag((1/ξ, 1/ξ, 1.)), dt=ti.f32)
     for I in ti.grouped(A):
-        A[I] = H[I].transpose() * (M**2) * H[I]
-    _, H = ti.sym_eig(A)
+        A[I] = H[I].transpose() * Mξ**2 * H[I]
+    # Find the eigenvectors of the dimensionless problem.
+    _, V = ti.sym_eig(A)
+    # TODO: Consider other ways of getting B2 and B3:
+    # Currently use only the eigenspace with smallest eigenvalue. However, since
+    # the matrix is symmetric positive-definite, we know that it has orthogonal
+    # eigenspaces. Hence, we could choose B2, B3 to simply be in the other
+    # eigenspaces, instead of forcing B2 to be purely spatial.
     for I in ti.grouped(B1):
-        c1 = H[I][0, 2]
+        # The main gauge vector is chosen to be in the eigenspace with the
+        # smallest eigenvalue.
+        c1 = V[I][0, 2]
         sign = ti.math.sign(c1)
         c1 *= sign
-        c2 = H[I][1, 2] * sign
-        c3 = H[I][2, 2] * sign
+        c2 = V[I][1, 2] * sign
+        c3 = V[I][2, 2] * sign
+        # Spatial angle of B1, which may differ from θs[I], so that A1 and B1
+        # do not point in the same direction spatially (deviation from
+        # horizontality).
         χ = ti.math.atan2(c2, c1)
         cosχ = ti.math.cos(χ)
         sinχ = ti.math.sin(χ)
+        # Orientational angle of B1, 
         ν = ti.math.atan2(c3, ti.math.sqrt(c1**2 + c2**2))
         cosν = ti.math.cos(ν)
         sinν = ti.math.sin(ν)
+
         B1[I][0] = c1
         B1[I][1] = c2
         B1[I][2] = c3

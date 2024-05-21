@@ -44,7 +44,7 @@ def convolve_with_kernel_x_dir(
     """
     @taichi.func
     
-    Convolve `u` the 1D kernel `k` in the x-direction.
+    Convolve `u` with the 1D kernel `k` in the x-direction.
 
     Args:
       Static:
@@ -73,7 +73,7 @@ def convolve_with_kernel_y_dir(
     """
     @taichi.func
     
-    Convolve `u` the 1D kernel `k` in the y-direction.
+    Convolve `u` with the 1D kernel `k` in the y-direction.
 
     Args:
       Static:
@@ -102,7 +102,7 @@ def convolve_with_kernel_θ_dir(
     """
     @taichi.func
     
-    Convolve `u` the 1D kernel `k` in the y-direction.
+    Convolve `u` with the 1D kernel `k` in the θ-direction.
 
     Args:
       Static:
@@ -121,6 +121,171 @@ def convolve_with_kernel_θ_dir(
             index = sanitize_reflected_index(ti.Vector([x, y, θ - radius + i], dt=ti.i32), u)
             s+= u[index] * k[2*radius-i]
         u_convolved[x, y, θ] = s
+
+@ti.func
+def convolve_matrix_3_by_3_with_kernel_x_dir(
+    M: ti.template(),
+    k: ti.template(),
+    radius: ti.i32,
+    M_convolved: ti.template()
+):
+    """
+    @taichi.func
+    
+    Convolve matrix field `M` with the 1D kernel `k` in the x-direction.
+
+    Args:
+      Static:
+        `M`: ti.Matrix.field(m=3, n=3, dtype=[float], shape=[Nx, Ny, Nθ]) matrix
+          field to be convolved.
+        `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel.
+        `radius`: radius at which kernel `k` is truncated, taking integer values
+          greater than 0.
+      Mutated:
+        `M_convolved`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) convolution
+          of `u` with `k`.
+    """
+    for x, y, θ in M_convolved:
+        s00 = 0.
+        s01 = 0.
+        s02 = 0.
+        s10 = 0.
+        s11 = 0.
+        s12 = 0.
+        s20 = 0.
+        s21 = 0.
+        s22 = 0.
+        for i in range(2*radius+1):
+            index = sanitize_reflected_index(ti.Vector([x - radius + i, y, θ], dt=ti.i32), M)
+            k_val = k[2*radius-i]
+            s00 += M[index][0, 0] * k_val
+            s01 += M[index][0, 1] * k_val
+            s02 += M[index][0, 2] * k_val
+            s10 += M[index][1, 0] * k_val
+            s11 += M[index][1, 1] * k_val
+            s12 += M[index][1, 2] * k_val
+            s20 += M[index][2, 0] * k_val
+            s21 += M[index][2, 1] * k_val
+            s22 += M[index][2, 2] * k_val
+        M_convolved[x, y, θ][0, 0] = s00
+        M_convolved[x, y, θ][0, 1] = s01
+        M_convolved[x, y, θ][0, 2] = s02
+        M_convolved[x, y, θ][1, 0] = s10
+        M_convolved[x, y, θ][1, 1] = s11
+        M_convolved[x, y, θ][1, 2] = s12
+        M_convolved[x, y, θ][2, 0] = s20
+        M_convolved[x, y, θ][2, 1] = s21
+        M_convolved[x, y, θ][2, 2] = s22
+
+@ti.func
+def convolve_matrix_3_by_3_with_kernel_y_dir(
+    M: ti.template(),
+    k: ti.template(),
+    radius: ti.i32,
+    M_convolved: ti.template()
+):
+    """
+    @taichi.func
+    
+    Convolve matrix field `M` with the 1D kernel `k` in the y-direction.
+
+    Args:
+      Static:
+        `M`: ti.Matrix.field(m=3, n=3, dtype=[float], shape=[Nx, Ny, Nθ]) matrix
+          field to be convolved.
+        `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel.
+        `radius`: radius at which kernel `k` is truncated, taking integer values
+          greater than 0.
+      Mutated:
+        `M_convolved`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) convolution
+          of `u` with `k`.
+    """
+    for x, y, θ in M_convolved:
+        s00 = 0.
+        s01 = 0.
+        s02 = 0.
+        s10 = 0.
+        s11 = 0.
+        s12 = 0.
+        s20 = 0.
+        s21 = 0.
+        s22 = 0.
+        for i in range(2*radius+1):
+            index = sanitize_reflected_index(ti.Vector([x, y - radius + i, θ], dt=ti.i32), M)
+            k_val = k[2*radius-i]
+            s00 += M[index][0, 0] * k_val
+            s01 += M[index][0, 1] * k_val
+            s02 += M[index][0, 2] * k_val
+            s10 += M[index][1, 0] * k_val
+            s11 += M[index][1, 1] * k_val
+            s12 += M[index][1, 2] * k_val
+            s20 += M[index][2, 0] * k_val
+            s21 += M[index][2, 1] * k_val
+            s22 += M[index][2, 2] * k_val
+        M_convolved[x, y, θ][0, 0] = s00
+        M_convolved[x, y, θ][0, 1] = s01
+        M_convolved[x, y, θ][0, 2] = s02
+        M_convolved[x, y, θ][1, 0] = s10
+        M_convolved[x, y, θ][1, 1] = s11
+        M_convolved[x, y, θ][1, 2] = s12
+        M_convolved[x, y, θ][2, 0] = s20
+        M_convolved[x, y, θ][2, 1] = s21
+        M_convolved[x, y, θ][2, 2] = s22
+
+@ti.func
+def convolve_matrix_3_by_3_with_kernel_θ_dir(
+    M: ti.template(),
+    k: ti.template(),
+    radius: ti.i32,
+    M_convolved: ti.template()
+):
+    """
+    @taichi.func
+    
+    Convolve matrix field `M` with the 1D kernel `k` in the θ-direction.
+
+    Args:
+      Static:
+        `M`: ti.Matrix.field(m=3, n=3, dtype=[float], shape=[Nx, Ny, Nθ]) matrix
+          field to be convolved.
+        `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel.
+        `radius`: radius at which kernel `k` is truncated, taking integer values
+          greater than 0.
+      Mutated:
+        `M_convolved`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) convolution
+          of `u` with `k`.
+    """
+    for x, y, θ in M_convolved:
+        s00 = 0.
+        s01 = 0.
+        s02 = 0.
+        s10 = 0.
+        s11 = 0.
+        s12 = 0.
+        s20 = 0.
+        s21 = 0.
+        s22 = 0.
+        for i in range(2*radius+1):
+            index = sanitize_reflected_index(ti.Vector([x, y, θ - radius + i], dt=ti.i32), M)
+            k_val = k[2*radius-i]
+            s00 += M[index][0, 0] * k_val
+            s01 += M[index][0, 1] * k_val
+            s02 += M[index][0, 2] * k_val
+            s10 += M[index][1, 0] * k_val
+            s11 += M[index][1, 1] * k_val
+            s12 += M[index][1, 2] * k_val
+            s20 += M[index][2, 0] * k_val
+            s21 += M[index][2, 1] * k_val
+            s22 += M[index][2, 2] * k_val
+        M_convolved[x, y, θ][0, 0] = s00
+        M_convolved[x, y, θ][0, 1] = s01
+        M_convolved[x, y, θ][0, 2] = s02
+        M_convolved[x, y, θ][1, 0] = s10
+        M_convolved[x, y, θ][1, 1] = s11
+        M_convolved[x, y, θ][1, 2] = s12
+        M_convolved[x, y, θ][2, 0] = s20
+        M_convolved[x, y, θ][2, 1] = s21
+        M_convolved[x, y, θ][2, 2] = s22
 
 def gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):
     """Compute kernel for 1D Gaussian derivative of order `order` at scale `σ`.
