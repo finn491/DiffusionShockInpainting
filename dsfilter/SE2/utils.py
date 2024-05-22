@@ -60,7 +60,7 @@ def sanitize_reflected_index(
     return ti.Vector([
         -I * (I < 0) + I * (0 <= I <= I_max) + (2 * I_max - I) * (I > I_max),
         -J * (J < 0) + J * (0 <= J <= J_max) + (2 * J_max - J) * (J > J_max),
-        ti.math.mod(K, K_max)
+        ti.math.mod(K, K_max + 1)
     ], dt=ti.i32)
 
 # Interpolate

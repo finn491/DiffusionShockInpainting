@@ -200,7 +200,7 @@ def laplace_perp(
         `laplace_perp_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ])
           perpendicular laplacian of u, which is updated in place.
     """
-    I_A3 = ti.Vector([0.0, 0.0, 1.0], dt=ti.f32)
+    # I_A3 = ti.Vector([0.0, 0.0, 1.0], dt=ti.f32)
     for I in ti.grouped(laplace_perp_u):
         θ = θs[I]
         cos = ti.math.cos(θ)
