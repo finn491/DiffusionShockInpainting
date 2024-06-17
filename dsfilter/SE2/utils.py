@@ -127,10 +127,10 @@ def scalar_trilinear_interpolate(
     r = ti.math.fract(index)
 
     f = ti.math.floor(index, ti.i32)
-    f = sanitize_index(f, input)
+    f = sanitize_reflected_index(f, input) # f = sanitize_index(f, input) # Mirror boundary conditions
 
     c = ti.math.ceil(index, ti.i32)
-    c = sanitize_index(c, input)
+    c = sanitize_reflected_index(c, input) # c = sanitize_index(c, input)
     
     v000 = input[f[0], f[1], f[2]]
     v001 = input[f[0], f[1], c[2]]

@@ -149,7 +149,6 @@ def gaussian_derivative_kernel_order_0(
           J. W. Brandenburg, J. Dijk, N. van den Brink, F. Faas, K. van Wijk,
           and T. Pham. "DIPlib 3". GitHub: https://github.com/DIPlib/diplib.
     """
-    ti.loop_config(serialize=True)
     for i in range(2*radius+1):
         x = -radius + i
         val = ti.math.exp(-x**2 / (2 * σ**2))
@@ -188,7 +187,6 @@ def gaussian_derivative_kernel_order_1(
           and T. Pham. "DIPlib 3". GitHub: https://github.com/DIPlib/diplib.
     """
     moment = 0.
-    ti.loop_config(serialize=True)
     for i in range(2*radius+1):
         x = -radius + i
         val = x * ti.math.exp(-x**2 / (2 * σ**2))
@@ -218,7 +216,7 @@ def normalise_field(
     """
     current_norm = 0.
     for I in ti.grouped(field):
-        current_norm += field[I]
+        ti.atomic_add(current_norm, field[I])
     norm_factor = norm / current_norm
     for I in ti.grouped(field):
         field[I] *= norm_factor
