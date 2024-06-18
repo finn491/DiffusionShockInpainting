@@ -30,9 +30,71 @@
 """
 
 import taichi as ti
-from dsfilter.SE2.utils import sanitize_reflected_index
+from dsfilter.SE2.utils import (
+    sanitize_reflected_index,
+    scalar_trilinear_interpolate
+)
 
 # We cannot nest parallelised loops in if-else statements in TaiChi kernels.
+
+@ti.func
+def regularise_anisotropic(
+    u: ti.template(),
+    θs: ti.template(),
+    dxy: ti.f32,
+    dθ: ti.f32,
+    σ1: ti.f32,
+    σ2: ti.f32,
+    σ3: ti.f32,
+    u_convolved: ti.template()
+):
+    """
+    @taichi.func
+    
+    Convolve `u` with the 1D kernel `k` in the x-direction.
+
+    Args:
+      Static:
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) array to be convolved.
+        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel.
+        `radius`: radius at which kernel `k` is truncated, taking integer values
+          greater than 0.
+      Mutated:
+        `u_convolved`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) convolution
+        of `u` with `k`.
+    """
+    radius = 2
+    Ks = radius * ti.math.ceil(ti.math.max(σ1, σ2) / dxy, ti.i32)
+    Ko = radius * ti.math.ceil(σ3 / dθ, ti.i32)
+    norm = (
+        ti.math.sqrt((2 * ti.math.pi)**3) * σ1 * σ2 * σ3 / # Normal distribution.
+        (dxy * dxy * dθ) # Volume of a single voxel.
+    )
+    for I in ti.grouped(u):
+        # Local orientation, along which one axis of the ellipsoid lies.
+        θ = θs[I]
+        cos = ti.math.cos(θ)
+        sin = ti.math.sin(θ)
+        s = 0.
+        Δx = -Ks * dxy
+        for ix in range(2*Ks+1):
+            Δy = -Ks * dxy
+            for iy in range(2*Ks+1):
+                Δθ = -Ko * dθ
+                for iθ in range(2*Ko+1):
+                    I_step = ti.Vector([Ks - ix, Ks - iy, Ko - iθ], ti.i32)
+                    # Project onto axes of ellipsoid.
+                    Δ1 = cos * Δx + sin * Δy
+                    Δ2 = -sin * Δx + cos * Δy
+                    Δ3 = Δθ
+                    # Scaled distance to centre of kernel.
+                    ρsq = (Δ1 / σ1)**2 + (Δ2 / σ2)**2 + (Δ3 / σ3)**2
+                    diff = ti.math.exp(-ρsq/2) / norm
+                    s += u[sanitize_reflected_index(I - I_step, u)] * diff
+                    Δθ += dθ
+                Δy += dxy 
+            Δx += dxy
+        u_convolved[I] = s
 
 @ti.func
 def convolve_with_kernel_x_dir(
@@ -356,7 +418,7 @@ def gaussian_derivative_kernel_order_0(
         x = -radius + i
         val = ti.math.exp(-x**2 / (2 * σ**2))
         k[i] = val
-    normalise_field(k, 1/dxy)
+    normalise_field(k, 1) # /dxy
 
 @ti.kernel
 def gaussian_derivative_kernel_order_1(

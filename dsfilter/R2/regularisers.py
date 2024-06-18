@@ -153,7 +153,7 @@ def gaussian_derivative_kernel_order_0(
         x = -radius + i
         val = ti.math.exp(-x**2 / (2 * σ**2))
         k[i] = val
-    normalise_field(k, 1/dxy)
+    normalise_field(k, 1) # /dxy
 
 @ti.kernel
 def gaussian_derivative_kernel_order_1(
