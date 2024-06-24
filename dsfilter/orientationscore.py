@@ -163,12 +163,15 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
     dθ = 2 * np.pi / Nθ
     cake_fourier = cakewavelet_stack_fourier(N_spatial, dθ, spline_order, overlap_factor, inflection_point, mn_order)
 
+    # Smooth out at origin in Fourier domain.
     cake_fourier[:, (N_spatial//2 - 2):(N_spatial//2 + 3), (N_spatial//2 - 2):(N_spatial//2 + 3)] = dθ / (2 * np.pi)
 
     cake = np.zeros_like(cake_fourier, dtype=np.complex_)
     rotation_amount = np.array((N_spatial // 2, N_spatial // 2))
     window = Gauss_window(N_spatial, Gaussian_σ)
     for i, slice_fourier in enumerate(cake_fourier):
+        # The Fourier transform in NumPy is not centered, so we have to uncenter
+        # the wavelet, moving it to the lower left corner.
         slice_fourier = np.roll(slice_fourier, -rotation_amount, axis=(0, 1)) # rotate left
         # Mathematica uses Fourier parameters {a, b} = {0, 1} by default, while
         # NumPy uses {a, b} = {1, -1}. The inverse Fourier transform is then
@@ -183,6 +186,7 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
         # However, if we use NumPy's convention, we can forget about n when
         # performing convolutions, so we don't multiply by n^(1/2).
         slice = np.conj(np.fft.ifftn(slice_fourier))
+        # Recenter the cakewavelet.
         slice = np.roll(slice, +rotation_amount, axis=(0, 1)) # rotate right
         cake[i] = slice * window
 

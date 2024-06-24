@@ -130,8 +130,8 @@ def gradient_perp(
     u: ti.template(),
     dxy: ti.f32,
     dθ: ti.f32,
-    ξ: ti.f32,
     θs: ti.template(),
+    ξ: ti.f32,
     gradient_perp_u: ti.template()
 ):
     """
@@ -144,10 +144,10 @@ def gradient_perp(
       Static:
         `u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) which we want to
           differentiate.
-        `θs`: angle coordinate at each grid point.
         `dxy`: step size in x and y direction, taking values greater than 0.
         `dθ`: step size in orientational direction, taking values greater than
           0.
+        `θs`: angle coordinate at each grid point.
         `ξ`: stiffness parameter defining the cost of moving one unit in the
           orientatonal direction relative to moving one unit in a spatial
           direction, taking values greater than 0.
@@ -175,8 +175,8 @@ def laplace_perp(
     u: ti.template(),
     dxy: ti.f32,
     dθ: ti.f32,
-    ξ: ti.f32,
     θs: ti.template(),
+    ξ: ti.f32,
     laplace_perp_u: ti.template()
 ):
     """
@@ -189,10 +189,10 @@ def laplace_perp(
       Static:
         `u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) which we want to
           differentiate.
-        `θs`: angle coordinate at each grid point.
         `dxy`: step size in x and y direction, taking values greater than 0.
         `dθ`: step size in orientational direction, taking values greater than
           0.
+        `θs`: angle coordinate at each grid point.
         `ξ`: stiffness parameter defining the cost of moving one unit in the
           orientatonal direction relative to moving one unit in a spatial
           direction, taking values greater than 0.
