@@ -68,7 +68,7 @@ def laplacian(
         # 1 | -4 | 1
         # 0 |  1 | 0
         laplacian_u[I] = 1/ dxy**2 * (
-            -4 * u[I] +
+            -6 * u[I] +
             index_reflected(u, I + I_dx) +
             index_reflected(u, I - I_dx) +
             index_reflected(u, I + I_dy) +

@@ -73,7 +73,7 @@ def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
           DOI:10.1007/s10851-024-01175-0.
     """
     # Set hyperparameters
-    dt = 0.2
+    dt = 0.1
     n = int(T / dt)
     # We reuse the Gaussian kernels
     k_DS, radius_DS = gaussian_derivative_kernel(ν, 0)
@@ -82,7 +82,6 @@ def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
 
     # Initialise TaiChi objects
     shape = u0_np.shape
-    print(shape)
     mask = ti.field(dtype=ti.f32, shape=shape)
     mask.from_numpy(mask_np)
     du_dt = ti.field(dtype=ti.f32, shape=shape)
@@ -117,6 +116,13 @@ def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
     d_dxz = ti.field(dtype=ti.f32, shape=shape)
     d_dyz = ti.field(dtype=ti.f32, shape=shape)
     d_dzz = ti.field(dtype=ti.f32, shape=shape)
+    dxdx = ti.field(dtype=ti.f32, shape=shape)
+    dxdy = ti.field(dtype=ti.f32, shape=shape)
+    dydy = ti.field(dtype=ti.f32, shape=shape)
+    dxdz = ti.field(dtype=ti.f32, shape=shape)
+    dydz = ti.field(dtype=ti.f32, shape=shape)
+    dzdz = ti.field(dtype=ti.f32, shape=shape)
+
     switch_morph = ti.field(dtype=ti.f32, shape=shape)
 
     for _ in tqdm(range(n)):
@@ -124,7 +130,7 @@ def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
         DS_switch(u_switch, dxy, k_DS, radius_DS, λ, d_dx_DS, d_dy_DS, d_dz_DS, switch_DS, convolution_storage, convolution_storage2)
         morphological_switch(u_switch, u_σ, dxy, ε, k_morph_int, radius_morph_int, d_dx_morph, d_dy_morph, d_dz_morph, k_morph_ext,
                              radius_morph_ext, d_dxx, d_dxy, d_dyy, d_dxz, d_dyz, d_dzz, switch_morph,
-                             convolution_storage, convolution_storage2)
+                             convolution_storage, convolution_storage2, dxdx, dxdy, dydy,dxdz,dydz,dzdz)
         # Compute derivatives
         laplacian(u, dxy, laplacian_u)
         morphological(u, dxy, dilation_u, erosion_u)
@@ -186,16 +192,19 @@ def step_DS_filter(
           DOI:10.1007/s10851-024-01175-0.
     """
     for I in ti.grouped(du_dt):
+        assert switch_DS[I] <=1, 'assert ds'
         du_dt[I] = (
             laplacian_u[I] * switch_DS[I] +
             (1 - switch_DS[I]) * (
                 # Do erosion when switch_morph = 1.
-                erosion_u[I] * (switch_morph[I] > 0.) * ti.abs(switch_morph[I])  +
+                erosion_u[I] * (switch_morph[I] > 0.)   +
                 # Do dilation when switch_morph = -1.
-                dilation_u[I] * (switch_morph[I] < 0.) * ti.abs(switch_morph[I])
-            )
+                dilation_u[I] * (switch_morph[I] < 0.) 
+            ) 
         )
-        u[I] += dt * du_dt[I] * (1 - mask[I]) # Only change values in the mask.
+        
+        if mask[I] < 1:
+          u[I] += dt * du_dt[I] # Only change values in the mask.
         
 
 # Fix padding function
