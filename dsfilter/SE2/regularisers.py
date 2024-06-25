@@ -30,10 +30,7 @@
 """
 
 import taichi as ti
-from dsfilter.SE2.utils import (
-    sanitize_reflected_index,
-    scalar_trilinear_interpolate
-)
+from dsfilter.SE2.utils import sanitize_reflected_index
 
 # We cannot nest parallelised loops in if-else statements in TaiChi kernels.
 
@@ -372,7 +369,7 @@ def gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):
           J. W. Brandenburg, J. Dijk, N. van den Brink, F. Faas, K. van Wijk,
           and T. Pham. "DIPlib 3". GitHub: https://github.com/DIPlib/diplib.
     """
-    radius = int(σ * truncate + 0.5)
+    radius = int(σ * truncate / dxy + 0.5)
     k = ti.field(dtype=ti.f32, shape=2*radius+1)
     match order:
         case 0:
