@@ -32,7 +32,8 @@ def sanitize_index(
     return ti.Vector([
         ti.math.clamp(index[0], 0, shape[0] - 1),
         ti.math.clamp(index[1], 0, shape[1] - 1),
-        ti.math.clamp(index[2], 0, shape[2] - 1)
+        #ti.math.clamp(index[2], 0, shape[2] - 1)
+        ti.math.mod(index[2], shape[2])
     ], dt=ti.i32)
 
 @ti.func
@@ -58,7 +59,8 @@ def sanitize_reflected_index(
     return ti.Vector([
         -I * (I < 0) + I * (0 <= I <= I_max) + (2 * I_max - I) * (I > I_max),
         -J * (J < 0) + J * (0 <= J <= J_max) + (2 * J_max - J) * (J > J_max),
-        -K * (K < 0) + K * (0 <= K <= K_max) + (2 * K_max - K) * (K > K_max),
+        #-K * (K < 0) + K * (0 <= K <= K_max) + (2 * K_max - K) * (K > K_max),
+        ti.math.mod(K, K_max + 1)
     ], dt=ti.i32)
 
 @ti.func

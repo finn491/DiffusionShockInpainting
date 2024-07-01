@@ -207,39 +207,39 @@ def morphological_switch(
         dydz[I] = d_dz[I]*d_dy[I]
         dxdz[I] = d_dx[I]*d_dz[I]
 
-    convolve_with_kernel_x_dir(dxdx, k_ext, radius_ext, convolution_storage)
-    convolve_with_kernel_y_dir(convolution_storage, k_ext, radius_ext, convolution_storage2)  
-    convolve_with_kernel_z_dir(convolution_storage2, k_ext, radius_ext, dxdx) 
-    convolve_with_kernel_x_dir(dydy, k_ext, radius_ext, convolution_storage)
-    convolve_with_kernel_y_dir(convolution_storage, k_ext, radius_ext, convolution_storage2)  
-    convolve_with_kernel_z_dir(convolution_storage2, k_ext, radius_ext, dydy) 
-    convolve_with_kernel_x_dir(dzdz, k_ext, radius_ext, convolution_storage)
-    convolve_with_kernel_y_dir(convolution_storage, k_ext, radius_ext, convolution_storage2)  
-    convolve_with_kernel_z_dir(convolution_storage2, k_ext, radius_ext, dzdz) 
-    convolve_with_kernel_x_dir(dxdy, k_ext, radius_ext, convolution_storage)
-    convolve_with_kernel_y_dir(convolution_storage, k_ext, radius_ext, convolution_storage2)  
-    convolve_with_kernel_z_dir(convolution_storage2, k_ext, radius_ext, dxdy) 
-    convolve_with_kernel_x_dir(dydz, k_ext, radius_ext, convolution_storage)
-    convolve_with_kernel_y_dir(convolution_storage, k_ext, radius_ext, convolution_storage2)  
-    convolve_with_kernel_z_dir(convolution_storage2, k_ext, radius_ext, dydz) 
-    convolve_with_kernel_x_dir(dxdz, k_ext, radius_ext, convolution_storage)
-    convolve_with_kernel_y_dir(convolution_storage, k_ext, radius_ext, convolution_storage2)  
-    convolve_with_kernel_z_dir(convolution_storage2, k_ext, radius_ext, dxdz) 
+    # convolve_with_kernel_x_dir(dxdx, k_ext, radius_ext, convolution_storage)
+    # convolve_with_kernel_y_dir(convolution_storage, k_ext, radius_ext, convolution_storage2)  
+    # convolve_with_kernel_z_dir(convolution_storage2, k_ext, radius_ext, dxdx) 
+    # convolve_with_kernel_x_dir(dydy, k_ext, radius_ext, convolution_storage)
+    # convolve_with_kernel_y_dir(convolution_storage, k_ext, radius_ext, convolution_storage2)  
+    # convolve_with_kernel_z_dir(convolution_storage2, k_ext, radius_ext, dydy) 
+    # convolve_with_kernel_x_dir(dzdz, k_ext, radius_ext, convolution_storage)
+    # convolve_with_kernel_y_dir(convolution_storage, k_ext, radius_ext, convolution_storage2)  
+    # convolve_with_kernel_z_dir(convolution_storage2, k_ext, radius_ext, dzdz) 
+    # convolve_with_kernel_x_dir(dxdy, k_ext, radius_ext, convolution_storage)
+    # convolve_with_kernel_y_dir(convolution_storage, k_ext, radius_ext, convolution_storage2)  
+    # convolve_with_kernel_z_dir(convolution_storage2, k_ext, radius_ext, dxdy) 
+    # convolve_with_kernel_x_dir(dydz, k_ext, radius_ext, convolution_storage)
+    # convolve_with_kernel_y_dir(convolution_storage, k_ext, radius_ext, convolution_storage2)  
+    # convolve_with_kernel_z_dir(convolution_storage2, k_ext, radius_ext, dydz) 
+    # convolve_with_kernel_x_dir(dxdz, k_ext, radius_ext, convolution_storage)
+    # convolve_with_kernel_y_dir(convolution_storage, k_ext, radius_ext, convolution_storage2)  
+    # convolve_with_kernel_z_dir(convolution_storage2, k_ext, radius_ext, dxdz) 
 
     for I in ti.grouped(switch):  
-      a = ti.Matrix([[dxdx[I], dxdy[I], dxdz[I] ],
-                     [dxdy[I], dydy[I], dydz[I] ],
-                     [dxdz[I], dydz[I], dzdz[I] ] ])
-      values, v = ti.sym_eig(a)
-      i = 2
-      if values[0] > values[1] and values[0] > values[2]:
-          i = 0
-      else:
-          if values[1] > values[0] and values[1] > values[2]:
-            i = 1
+    #   a = ti.Matrix([[dxdx[I], dxdy[I], dxdz[I] ],
+    #                  [dxdy[I], dydy[I], dydz[I] ],
+    #                  [dxdz[I], dydz[I], dzdz[I] ] ])
+    #   values, v = ti.sym_eig(a)
+    #   i = 2
+    #   if values[0] > values[1] and values[0] > values[2]:
+    #       i = 0
+    #   else:
+    #       if values[1] > values[0] and values[1] > values[2]:
+    #         i = 1
 
-      d_dww = v[0,i]**2 * d_dxx[I] + v[1,i]**2 *  d_dyy[I] + v[2,i]**2 *  d_dzz[I] +  2* v[0,i]* v[1,i] * d_dxy[I] +  2* v[0,i]* v[2,i] * d_dxz[I] +  2* v[1,i] * v[2,i] * d_dyz[I]
-      switch[I] = (ε > 0.) * S_ε(d_dww, ε) + (ε == 0.) * ti.math.sign(d_dww)
+    #   d_dww = v[0,i]**2 * d_dxx[I] + v[1,i]**2 *  d_dyy[I] + v[2,i]**2 *  d_dzz[I] +  2* v[0,i]* v[1,i] * d_dxy[I] +  2* v[0,i]* v[2,i] * d_dxz[I] +  2* v[1,i] * v[2,i] * d_dyz[I]
+      switch[I] = (ε > 0.) * S_ε(d_dzz[I], ε) + (ε == 0.) * ti.math.sign(d_dzz[I])
     
       
 
