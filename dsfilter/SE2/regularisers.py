@@ -48,50 +48,78 @@ def regularise_anisotropic(
     """
     @taichi.func
     
-    Convolve `u` with the 1D kernel `k` in the x-direction.
+    Regularise `u` by convolving with a heat kernel, computed using half angle
+    distance approximations.[1]
 
     Args:
       Static:
         `u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) array to be convolved.
-        `k`: ti.field(dtype=ti.f32, shape=2*`radius`+1) of kernel.
-        `radius`: radius at which kernel `k` is truncated, taking integer values
-          greater than 0.
+        `θs`: angle coordinate at each grid point.
+        `dxy`: step size in x and y direction, taking values greater than 0.
+        `dθ`: step size in orientational direction, taking values greater than
+          0.
+        `σ*`: "standard deviation" of the heat kernel in the A* direction.
       Mutated:
         `u_convolved`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) convolution
-        of `u` with `k`.
+          of `u` with heat kernel.
+
+    References:
+        [1]: G. Bellaard, D.L.J. Bon, G. Pai, B.M.N. Smets, and R. Duits.
+          "Analysis of (sub-)Riemannian PDE-G-CNNs". In: Journal of Mathematical
+          Imaging and Vision 65 (2023), pp. 819--843.
+          DOI:10.1007/s10851-023-01147-w.
     """
-    radius = 2
-    Ks = radius * ti.math.ceil(ti.math.max(σ1, σ2) / dxy, ti.i32)
-    Ko = radius * ti.math.ceil(σ3 / dθ, ti.i32)
-    norm = (
-        ti.math.sqrt((2 * ti.math.pi)**3) * σ1 * σ2 * σ3 / # Normal distribution.
-        (dxy * dxy * dθ) # Volume of a single voxel.
-    )
+    # Compute radii of kernel.
+    truncate = 4
+    rs = truncate * ti.math.ceil(ti.math.max(σ1, σ2) / dxy, ti.i32)
+    ro = truncate * ti.math.ceil(σ3 / dθ, ti.i32)
+    # Metric parameters roughly corresponding to standard deviations.
+    w1 = 1/ti.math.sqrt(2*(σ1 / dxy)**2)
+    w2 = 1/ti.math.sqrt(2*(σ2 / dxy)**2)
+    w3 = 1/ti.math.sqrt(2*(σ3 / dθ)**2)
+    # Group convolution definition:
+    #   (K * f)(g) := ∫ Lh K(g) f(h) dμ(h) = ∫ K(h^-1) f(g h) dμ(h).
     for I in ti.grouped(u):
-        # Local orientation, along which one axis of the ellipsoid lies.
+        # Currently at p = (x, y, θ).
         θ = θs[I]
         cos = ti.math.cos(θ)
         sin = ti.math.sin(θ)
         s = 0.
-        Δx = -Ks * dxy
-        for ix in range(2*Ks+1):
-            Δy = -Ks * dxy
-            for iy in range(2*Ks+1):
-                Δθ = -Ko * dθ
-                for iθ in range(2*Ko+1):
-                    I_step = ti.Vector([Ks - ix, Ks - iy, Ko - iθ], ti.i32)
-                    # Project onto axes of ellipsoid.
-                    Δ1 = cos * Δx + sin * Δy
-                    Δ2 = -sin * Δx + cos * Δy
-                    Δ3 = Δθ
-                    # Scaled distance to centre of kernel.
-                    ρsq = (Δ1 / σ1)**2 + (Δ2 / σ2)**2 + (Δ3 / σ3)**2
-                    diff = ti.math.exp(-ρsq/2) / norm
-                    s += u[sanitize_reflected_index(I - I_step, u)] * diff
-                    Δθ += dθ
-                Δy += dxy 
-            Δx += dxy
-        u_convolved[I] = s
+        norm = 0.
+        for ix in range(2*rs+1):
+            for iy in range(2*rs+1):
+                for iθ in range(2*ro+1):
+                    Δx = (-rs + ix) * dxy
+                    Δy = (-rs + iy) * dxy
+                    Δθ = (-ro + iθ) * dθ
+                    # Evaluate kernel at q = p + (Δx, Δy, Δθ).
+                    # # Shift q to origin with inverse of p:
+                    # #   p^-1 q = (cos(θ) Δx + sin(θ) Δy, -sin(θ) Δx + cos(θ) Δy, Δθ).
+                    # Δ1 = cos * Δx + sin * Δy
+                    # Δ2 = -sin * Δx + cos * Δy
+                    # Δ3 = Δθ
+                    # # Half angle coordinates of p^-1 q = (Δ1, Δ2, Δ3):
+                    # #   b^1 := cos(Δ3/2) Δ1 + sin(Δ3/2) Δ2 = cos(θ + Δθ/2) Δx + sin(θ + Δθ/2) Δy,
+                    # #   b^2 := -sin(Δ3/2) Δ1 + cos(Δ3/2) Δ2 = -sin(θ + Δθ/2) Δx + cos(θ + Δθ/2) Δy,
+                    # #   b^3 := Δ3 = Δθ.
+                    # coshalf = ti.math.cos(Δ3/2)
+                    # sinhalf = ti.math.sin(Δ3/2)
+                    # b1 = coshalf * Δ1 + sinhalf * Δ2
+                    # b2 = -sinhalf * Δ1 + coshalf * Δ2
+                    # b3 = Δ3
+
+                    b1 = ti.math.cos(θ + Δθ/2) * Δx + ti.math.sin(θ + Δθ/2) * Δy
+                    b2 = -ti.math.sin(θ + Δθ/2) * Δx + ti.math.cos(θ + Δθ/2) * Δy
+                    b3 = Δθ
+                    # Simple distance approximation.
+                    ρsq = (w1 * b1)**2 + (w2 * b2)**2 + (w3 * b3)**2
+                    diff = ti.math.exp(-ρsq/2)
+                    norm += diff
+                    # Actually doing a correlation, but since the kernel is
+                    # symmetric, i.e. K(h^-1) = K(h), this is the same.
+                    I_step = ti.Vector([ix - rs, iy - rs, iθ - ro], ti.i32)
+                    s += u[sanitize_reflected_index(I + I_step, u)] * diff
+        u_convolved[I] = s / norm
 
 @ti.func
 def convolve_with_kernel_x_dir(
