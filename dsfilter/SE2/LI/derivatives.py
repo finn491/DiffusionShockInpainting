@@ -61,7 +61,7 @@ def laplacian(
         A33 = (scalar_trilinear_interpolate(u, I + I_A3) -
                2 * u[I] +
                scalar_trilinear_interpolate(u, I - I_A3)) / dθ**2
-        # Δu = div(grad(u)) = A_i (g^ij A_j u) = g^ij A_i A_j u
+        # Δu = div(grad(u)) = sqrt(det(g)) A_i (sqrt(det(g)) g^ij A_j u) = g^ij A_i A_j u = g^ii A_i A_i u
         laplacian_u[I] = G_inv[0] * A11 + G_inv[1] * A22 + G_inv[2] * A33
 
 @ti.kernel
@@ -111,7 +111,7 @@ def morphological(
         A2_backward = (u[I] - scalar_trilinear_interpolate(u, I - I_A2)) / dxy
         A3_backward = (u[I] - scalar_trilinear_interpolate(u, I - I_A3)) / dθ
 
-        # ||grad u|| = sqrt(G(grad u, grad u)) = sqrt(g^ij A_i u A_j u)
+        # ||grad u|| = sqrt(G(grad u, grad u)) = sqrt(g^ij A_i u A_j u) = sqrt(g^ii (A_i u)^2)
         # Dilation
         dilation_u[I] = ti.math.sqrt(
             G_inv[0] * select_upwind_derivative_dilation(A1_forward, A1_backward)**2 +
@@ -155,20 +155,31 @@ def gradient_perp(
         `gradient_perp_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ])
           perpendicular gradient of u, which is updated in place.
     """
-    I_A3 = ti.Vector([0.0, 0.0, 1.0], dt=ti.f32) / 2
     for I in ti.grouped(gradient_perp_u):
         θ = θs[I]
         cos = ti.math.cos(θ)
         sin = ti.math.sin(θ)
         I_A2 = ti.Vector([-sin, cos, 0.0], dt=ti.f32) / 2
-        # ||grad_perp u||^2 = ξ^-2 (A_2 u)^2 + (A_3 u)^2
+        # ||grad_perp u|| = sqrt(G(grad_perp u, grad_perp u)) = sqrt(g^ij A_i u A_j u) = sqrt(g^22 (A_2 u)^2)
         gradient_perp_u[I] = ti.math.sqrt(((
                 scalar_trilinear_interpolate(u, I + I_A2) - scalar_trilinear_interpolate(u, I - I_A2)
-            ) / (dxy * ξ))**2 +
-            ((
-                scalar_trilinear_interpolate(u, I + I_A3) - scalar_trilinear_interpolate(u, I - I_A3)
-            ) / dθ)**2
+            ) / dxy)**2
         )
+
+    # I_A3 = ti.Vector([0.0, 0.0, 1.0], dt=ti.f32) / 2
+    # for I in ti.grouped(gradient_perp_u):
+    #     θ = θs[I]
+    #     cos = ti.math.cos(θ)
+    #     sin = ti.math.sin(θ)
+    #     I_A2 = ti.Vector([-sin, cos, 0.0], dt=ti.f32) / 2
+    #     # ||grad_perp u|| = sqrt(G(grad_perp u, grad_perp u)) = sqrt(g^ij A_i u A_j u) = sqrt(ξ^-2 (A_2 u)^2 + (A_3 u)^2)
+    #     gradient_perp_u[I] = ti.math.sqrt(((
+    #             scalar_trilinear_interpolate(u, I + I_A2) - scalar_trilinear_interpolate(u, I - I_A2)
+    #         ) / (dxy * ξ))**2 +
+    #         ((
+    #             scalar_trilinear_interpolate(u, I + I_A3) - scalar_trilinear_interpolate(u, I - I_A3)
+    #         ) / dθ)**2
+    #     )
 
 @ti.func
 def laplace_perp(
@@ -200,21 +211,31 @@ def laplace_perp(
         `laplace_perp_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ])
           perpendicular laplacian of u, which is updated in place.
     """
-    I_A3 = ti.Vector([0.0, 0.0, 1.0], dt=ti.f32)
     for I in ti.grouped(laplace_perp_u):
         θ = θs[I]
         cos = ti.math.cos(θ)
         sin = ti.math.sin(θ)
         I_A2 = ti.Vector([-sin, cos, 0.0], dt=ti.f32)
-        # Δ_perp u = ξ^-2 A_2 A_2 u + A_3 A_3 u
+        # Δ_perp u = div_perp(grad_perp(u)) = sqrt(det(g)) A_i (sqrt(det(g)) g^ij A_j u) = g^ij A_i A_j u = A_2 A_2 u
         laplace_perp_u[I] = ((
                 scalar_trilinear_interpolate(u, I + I_A2) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_A2)
-            ) / (dxy * ξ)**2 +
-            (
-                scalar_trilinear_interpolate(u, I + I_A3) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_A3)
-            ) / dθ**2
+            ) / dxy**2
         )
-        # Δu = div(grad(u)) = A_i (g^ij A_j u) = g^ij A_i A_j u
+
+    # I_A3 = ti.Vector([0.0, 0.0, 1.0], dt=ti.f32)
+    # for I in ti.grouped(laplace_perp_u):
+    #     θ = θs[I]
+    #     cos = ti.math.cos(θ)
+    #     sin = ti.math.sin(θ)
+    #     I_A2 = ti.Vector([-sin, cos, 0.0], dt=ti.f32)
+    #     # Δ_perp u = div_perp(grad_perp(u)) = sqrt(det(g)) A_i (sqrt(det(g)) g^ij A_j u) = g^ij A_i A_j u = ξ^-2 A_2 A_2 u + A_3 A_3 u
+    #     laplace_perp_u[I] = ((
+    #             scalar_trilinear_interpolate(u, I + I_A2) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_A2)
+    #         ) / (dxy * ξ)**2 +
+    #         (
+    #             scalar_trilinear_interpolate(u, I + I_A3) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_A3)
+    #         ) / dθ**2
+    #     )
 
 # For simplified inpainting
         
