@@ -24,7 +24,8 @@ def clean_mask_boundaries(u, mask):
     dim_K = u.shape[-1]
     u_preprocessed = np.zeros_like(u)
     for k in range(dim_K):
-        u_preprocessed[..., k] += mask[..., k] * u[..., k] + (1 - mask) * u[..., k].mean()
+        u_preprocessed[..., k] += mask[..., k] * u[..., k] + (1 - mask[..., k]) * u[..., k].mean()
+    return u_preprocessed
 
 # Safe Indexing
 

@@ -47,9 +47,13 @@ def DS_switch(
     dθ: ti.f32,
     ξ: ti.f32,
     θs: ti.template(),
-    ν_1: ti.f32,
-    ν_2: ti.f32,
-    ν_3: ti.f32,
+    # ν_1: ti.f32,
+    # ν_2: ti.f32,
+    # ν_3: ti.f32,
+    k_s: ti.template(),
+    radius_s: ti.template(),
+    k_o: ti.template(),
+    radius_o: ti.template(),
     λ: ti.f32,
     gradient_perp_u: ti.template(),
     switch: ti.template(),
@@ -93,27 +97,27 @@ def DS_switch(
           Imaging and Vision (2024).
           DOI:10.1007/s10851-024-01175-0.
     """
-    # First regularise internally.
-    regularise_anisotropic(u, θs, dxy, dθ, ν_1, ν_2, ν_3, storage)
-    # Then compute perpendicular gradient, which is a measure for lineness.
-    gradient_perp(storage, dxy, dθ, θs, ξ, gradient_perp_u)
-    for I in ti.grouped(switch):
-        storage[I] = g_scalar(gradient_perp_u[I]**2, λ)
-    # Finally regularise externally.
-    regularise_anisotropic(storage, θs, dxy, dθ, ν_1, ν_2, ν_3, switch)
-
-    # # First regularise internally with Gaussian convolution.
-    # convolve_with_kernel_x_dir(u, k_s, radius_s, convolution_storage_1)
-    # convolve_with_kernel_y_dir(convolution_storage_1, k_s, radius_s, convolution_storage_2)
-    # convolve_with_kernel_θ_dir(convolution_storage_2, k_o, radius_o, switch)
+    # # First regularise internally.
+    # regularise_anisotropic(u, θs, dxy, dθ, ν_1, ν_2, ν_3, storage)
     # # Then compute perpendicular gradient, which is a measure for lineness.
-    # gradient_perp(switch, dxy, dθ, θs, ξ, gradient_perp_u)
+    # gradient_perp(storage, dxy, dθ, θs, ξ, gradient_perp_u)
     # for I in ti.grouped(switch):
-    #     switch[I] = g_scalar(gradient_perp_u[I]**2, λ)
+    #     storage[I] = g_scalar(gradient_perp_u[I]**2, λ)
+    # # Finally regularise externally.
+    # regularise_anisotropic(storage, θs, dxy, dθ, ν_1, ν_2, ν_3, switch)
+
+    # First regularise internally with Gaussian convolution.
+    convolve_with_kernel_x_dir(u, k_s, radius_s, switch)
+    convolve_with_kernel_y_dir(switch, k_s, radius_s, storage)
+    convolve_with_kernel_θ_dir(storage, k_o, radius_o, switch)
+    # Then compute perpendicular gradient, which is a measure for lineness.
+    gradient_perp(switch, dxy, dθ, θs, ξ, gradient_perp_u)
+    for I in ti.grouped(switch):
+        switch[I] = g_scalar(gradient_perp_u[I]**2, λ)
     # # Finally regularise externally with Gaussian convolution.
-    # convolve_with_kernel_x_dir(switch, k_s, radius_s, convolution_storage_1)
-    # convolve_with_kernel_y_dir(convolution_storage_1, k_s, radius_s, convolution_storage_2)
-    # convolve_with_kernel_θ_dir(convolution_storage_2, k_o, radius_o, switch)
+    # convolve_with_kernel_x_dir(switch, k_s, radius_s, gradient_perp_u)
+    # convolve_with_kernel_y_dir(gradient_perp_u, k_s, radius_s, storage)
+    # convolve_with_kernel_θ_dir(storage, k_o, radius_o, switch)
 
 # Morphological
 
@@ -125,12 +129,20 @@ def morphological_switch(
     ξ: ti.f32,
     θs: ti.template(),
     ε: ti.f32,
-    σ_1: ti.f32,
-    σ_2: ti.f32,
-    σ_3: ti.f32,
-    ρ_1: ti.f32,
-    ρ_2: ti.f32,
-    ρ_3: ti.f32,
+    # σ_1: ti.f32,
+    # σ_2: ti.f32,
+    # σ_3: ti.f32,
+    # ρ_1: ti.f32,
+    # ρ_2: ti.f32,
+    # ρ_3: ti.f32,
+    k_int_s: ti.template(),
+    radius_int_s: ti.template(),
+    k_int_o: ti.template(),
+    radius_int_o: ti.template(),
+    k_ext_s: ti.template(),
+    radius_ext_s: ti.template(),
+    k_ext_o: ti.template(),
+    radius_ext_o: ti.template(),
     laplace_perp_u: ti.template(),
     switch: ti.template(),
     storage: ti.template()
@@ -176,27 +188,27 @@ def morphological_switch(
           Imaging and Vision (2024).
           DOI:10.1007/s10851-024-01175-0.
     """
-    # First regularise internally.
-    regularise_anisotropic(u, θs, dxy, dθ, σ_1, σ_2, σ_3, storage)
+    # # First regularise internally.
+    # regularise_anisotropic(u, θs, dxy, dθ, σ_1, σ_2, σ_3, storage)
+    # # Then compute perpendicular laplacian, which is a measure for convexity.
+    # laplace_perp(switch, dxy, dθ, θs, ξ, laplace_perp_u)
+    # for I in ti.grouped(switch):
+    #     storage[I] = (ε > 0.) * S_ε(laplace_perp_u[I], ε) + (ε == 0.) * ti.math.sign(laplace_perp_u[I])
+    # # Finally regularise externally.
+    # regularise_anisotropic(storage, θs, dxy, dθ, ρ_1, ρ_2, ρ_3, switch)
+
+    # First regularise internally with Gaussian convolution.
+    convolve_with_kernel_x_dir(u, k_int_s, radius_int_s, switch)
+    convolve_with_kernel_y_dir(switch, k_int_s, radius_int_s, storage)
+    convolve_with_kernel_θ_dir(storage, k_int_o, radius_int_o, switch)
     # Then compute perpendicular laplacian, which is a measure for convexity.
     laplace_perp(switch, dxy, dθ, θs, ξ, laplace_perp_u)
     for I in ti.grouped(switch):
         switch[I] = (ε > 0.) * S_ε(laplace_perp_u[I], ε) + (ε == 0.) * ti.math.sign(laplace_perp_u[I])
-    # Finally regularise externally.
-    regularise_anisotropic(storage, θs, dxy, dθ, ρ_1, ρ_2, ρ_3, switch)
-
-    # # First regularise internally with Gaussian convolution.
-    # convolve_with_kernel_x_dir(u, k_int_s, radius_int_s, convolution_storage_1)
-    # convolve_with_kernel_y_dir(convolution_storage_1, k_int_s, radius_int_s, convolution_storage_2)
-    # convolve_with_kernel_θ_dir(convolution_storage_2, k_int_o, radius_int_o, switch)
-    # # Then compute perpendicular laplacian, which is a measure for convexity.
-    # laplace_perp(switch, dxy, dθ, θs, ξ, laplace_perp_u)
-    # for I in ti.grouped(switch):
-    #     switch[I] = (ε > 0.) * S_ε(laplace_perp_u[I], ε) + (ε == 0.) * ti.math.sign(laplace_perp_u[I])
-    # # Finally regularise externally with Gaussian convolution.
-    # convolve_with_kernel_x_dir(switch, k_ext_s, radius_ext_s, convolution_storage_1)
-    # convolve_with_kernel_y_dir(convolution_storage_1, k_ext_s, radius_ext_s, convolution_storage_2)
-    # convolve_with_kernel_θ_dir(convolution_storage_2, k_ext_o, radius_ext_o, switch)
+    # Finally regularise externally with Gaussian convolution.
+    convolve_with_kernel_x_dir(switch, k_ext_s, radius_ext_s, laplace_perp_u)
+    convolve_with_kernel_y_dir(laplace_perp_u, k_ext_s, radius_ext_s, storage)
+    convolve_with_kernel_θ_dir(storage, k_ext_o, radius_ext_o, switch)
 
 # For simplified inpainting
     
