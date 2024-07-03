@@ -13,6 +13,8 @@
       of order 0 and 1, using an algorithm that improves the accuracy of higher
       order derivative kernels with small widths, based on the DIPlib[1]
       algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
+      5. `regularise_anisotropic`: regularise a field with a potentially
+      anisotropic heat kernel, computed using a half angle approximation.[2]
     We use that the spatially isotropic diffusion equation on SE(2) can be
     solved by convolving in the x-, y-, and θ-direction with some 1D kernel. For
     the x- and y-directions, this kernel is a Gaussian; for the θ-direction the
@@ -27,99 +29,125 @@
       M. van Ginkel, L. van Vliet, B. Rieger, B. Verwer, H. Netten,
       J. W. Brandenburg, J. Dijk, N. van den Brink, F. Faas, K. van Wijk,
       and T. Pham. "DIPlib 3". GitHub: https://github.com/DIPlib/diplib.
+      [2]: G. Bellaard, D.L.J. Bon, G. Pai, B.M.N. Smets, and R. Duits.
+      "Analysis of (sub-)Riemannian PDE-G-CNNs". In: Journal of Mathematical
+      Imaging and Vision 65 (2023), pp. 819--843.
+      DOI:10.1007/s10851-023-01147-w.
 """
 
 import taichi as ti
 from dsfilter.SE2.utils import sanitize_reflected_index
 
-# We cannot nest parallelised loops in if-else statements in TaiChi kernels.
+# Scalar Field Regularisation
+## Isotropic
 
-@ti.func
-def regularise_anisotropic(
-    u: ti.template(),
-    θs: ti.template(),
-    dxy: ti.f32,
-    dθ: ti.f32,
-    σ1: ti.f32,
-    σ2: ti.f32,
-    σ3: ti.f32,
-    u_convolved: ti.template()
+def gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):
+    """Compute kernel for 1D Gaussian derivative of order `order` at scale `σ`.
+
+    Based on the DIPlib[1] algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
+
+    Args:
+        `σ`: scale of Gaussian, taking values greater than 0.
+        `order`: order of the derivative, taking values 0 or 1.
+        `truncate`: number of scales `σ` at which kernel is truncated, taking 
+          values greater than 0.
+        `dxy`: step size in x and y direction, taking values greater than 0.
+
+    Returns:
+        Tuple ti.field(dtype=[float], shape=2*radius+1) of the Gaussian kernel
+          and the radius of the kernel.
+
+    References:
+        [1]: C. Luengo, W. Caarls, R. Ligteringen, E. Schuitema, Y. Guo,
+          E. Wernersson, F. Malmberg, S. Lokhorst, M. Wolff, G. van Kempen,
+          M. van Ginkel, L. van Vliet, B. Rieger, B. Verwer, H. Netten,
+          J. W. Brandenburg, J. Dijk, N. van den Brink, F. Faas, K. van Wijk,
+          and T. Pham. "DIPlib 3". GitHub: https://github.com/DIPlib/diplib.
+    """
+    radius = int(σ * truncate / dxy + 0.5)
+    k = ti.field(dtype=ti.f32, shape=2*radius+1)
+    match order:
+        case 0:
+            gaussian_derivative_kernel_order_0(σ, radius, k)
+        case 1:
+            gaussian_derivative_kernel_order_1(σ, radius, dxy, k)
+        case _:
+            raise(NotImplementedError(f"Order {order} has not been implemented yet; choose order 0 or 1."))
+    return k, radius
+
+@ti.kernel
+def gaussian_derivative_kernel_order_0(
+    σ: ti.f32,
+    radius: ti.i32,
+    k: ti.template()
 ):
     """
-    @taichi.func
+    @taichi.kernel
     
-    Regularise `u` by convolving with a heat kernel, computed using half angle
-    distance approximations.[1]
+    Compute 1D Gaussian kernel at scale `σ`.
+
+    Based on the DIPlib[1] algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
 
     Args:
       Static:
-        `u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) array to be convolved.
-        `θs`: angle coordinate at each grid point.
-        `dxy`: step size in x and y direction, taking values greater than 0.
-        `dθ`: step size in orientational direction, taking values greater than
-          0.
-        `σ*`: "standard deviation" of the heat kernel in the A* direction.
+        `σ`: scale of Gaussian, taking values greater than 0.
+        `radius`: radius at which kernel is truncated, taking integer values
+          greater than 0.
       Mutated:
-        `u_convolved`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) convolution
-          of `u` with heat kernel.
+        `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel, which is
+          updated in place.
 
     References:
-        [1]: G. Bellaard, D.L.J. Bon, G. Pai, B.M.N. Smets, and R. Duits.
-          "Analysis of (sub-)Riemannian PDE-G-CNNs". In: Journal of Mathematical
-          Imaging and Vision 65 (2023), pp. 819--843.
-          DOI:10.1007/s10851-023-01147-w.
+        [1]: C. Luengo, W. Caarls, R. Ligteringen, E. Schuitema, Y. Guo,
+          E. Wernersson, F. Malmberg, S. Lokhorst, M. Wolff, G. van Kempen,
+          M. van Ginkel, L. van Vliet, B. Rieger, B. Verwer, H. Netten,
+          J. W. Brandenburg, J. Dijk, N. van den Brink, F. Faas, K. van Wijk,
+          and T. Pham. "DIPlib 3". GitHub: https://github.com/DIPlib/diplib.
     """
-    # Compute radii of kernel.
-    truncate = 4
-    rs = truncate * ti.math.ceil(ti.math.max(σ1, σ2) / dxy, ti.i32)
-    ro = truncate * ti.math.ceil(σ3 / dθ, ti.i32)
-    # Metric parameters roughly corresponding to standard deviations.
-    w1 = 1/ti.math.sqrt(2*(σ1 / dxy)**2)
-    w2 = 1/ti.math.sqrt(2*(σ2 / dxy)**2)
-    w3 = 1/ti.math.sqrt(2*(σ3 / dθ)**2)
-    # Group convolution definition:
-    #   (K * f)(g) := ∫ Lh K(g) f(h) dμ(h) = ∫ K(h^-1) f(g h) dμ(h).
-    for I in ti.grouped(u):
-        # Currently at p = (x, y, θ).
-        θ = θs[I]
-        cos = ti.math.cos(θ)
-        sin = ti.math.sin(θ)
-        s = 0.
-        norm = 0.
-        for ix in range(2*rs+1):
-            for iy in range(2*rs+1):
-                for iθ in range(2*ro+1):
-                    Δx = (-rs + ix) * dxy
-                    Δy = (-rs + iy) * dxy
-                    Δθ = (-ro + iθ) * dθ
-                    # Evaluate kernel at q = p + (Δx, Δy, Δθ).
-                    # # Shift q to origin with inverse of p:
-                    # #   p^-1 q = (cos(θ) Δx + sin(θ) Δy, -sin(θ) Δx + cos(θ) Δy, Δθ).
-                    # Δ1 = cos * Δx + sin * Δy
-                    # Δ2 = -sin * Δx + cos * Δy
-                    # Δ3 = Δθ
-                    # # Half angle coordinates of p^-1 q = (Δ1, Δ2, Δ3):
-                    # #   b^1 := cos(Δ3/2) Δ1 + sin(Δ3/2) Δ2 = cos(θ + Δθ/2) Δx + sin(θ + Δθ/2) Δy,
-                    # #   b^2 := -sin(Δ3/2) Δ1 + cos(Δ3/2) Δ2 = -sin(θ + Δθ/2) Δx + cos(θ + Δθ/2) Δy,
-                    # #   b^3 := Δ3 = Δθ.
-                    # coshalf = ti.math.cos(Δ3/2)
-                    # sinhalf = ti.math.sin(Δ3/2)
-                    # b1 = coshalf * Δ1 + sinhalf * Δ2
-                    # b2 = -sinhalf * Δ1 + coshalf * Δ2
-                    # b3 = Δ3
+    for i in range(2*radius+1):
+        x = -radius + i
+        val = ti.math.exp(-x**2 / (2 * σ**2))
+        k[i] = val
+    normalise_field(k, 1)
 
-                    b1 = ti.math.cos(θ + Δθ/2) * Δx + ti.math.sin(θ + Δθ/2) * Δy
-                    b2 = -ti.math.sin(θ + Δθ/2) * Δx + ti.math.cos(θ + Δθ/2) * Δy
-                    b3 = Δθ
-                    # Simple distance approximation.
-                    ρsq = (w1 * b1)**2 + (w2 * b2)**2 + (w3 * b3)**2
-                    diff = ti.math.exp(-ρsq/2)
-                    norm += diff
-                    # Actually doing a correlation, but since the kernel is
-                    # symmetric, i.e. K(h^-1) = K(h), this is the same.
-                    I_step = ti.Vector([ix - rs, iy - rs, iθ - ro], ti.i32)
-                    s += u[sanitize_reflected_index(I + I_step, u)] * diff
-        u_convolved[I] = s / norm
+@ti.kernel
+def gaussian_derivative_kernel_order_1(
+    σ: ti.f32,
+    radius: ti.i32,
+    dxy: ti.f32,
+    k: ti.template()
+):
+    """
+    @taichi.kernel
+    
+    Compute kernel for 1D Gaussian derivative of order 1 at scale `σ`.
+
+    Based on the DIPlib[1] algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
+
+    Args:
+      Static:
+        `σ`: scale of Gaussian, taking values greater than 0.
+        `radius`: radius at which kernel is truncated, taking integer values
+          greater than 0.
+        `dxy`: step size in x and y direction, taking values greater than 0.
+      Mutated:
+        `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel, which is
+          updated in place.
+
+    References:
+        [1]: C. Luengo, W. Caarls, R. Ligteringen, E. Schuitema, Y. Guo,
+          E. Wernersson, F. Malmberg, S. Lokhorst, M. Wolff, G. van Kempen,
+          M. van Ginkel, L. van Vliet, B. Rieger, B. Verwer, H. Netten,
+          J. W. Brandenburg, J. Dijk, N. van den Brink, F. Faas, K. van Wijk,
+          and T. Pham. "DIPlib 3". GitHub: https://github.com/DIPlib/diplib.
+    """
+    moment = 0.
+    for i in range(2*radius+1):
+        x = -radius + i
+        val = x * ti.math.exp(-x**2 / (2 * σ**2))
+        moment += x * val
+        k[i] = val
+    divide_field(k, -moment * dxy)
 
 @ti.func
 def convolve_with_kernel_x_dir(
@@ -208,6 +236,92 @@ def convolve_with_kernel_θ_dir(
             index = sanitize_reflected_index(ti.Vector([x, y, θ - radius + i], dt=ti.i32), u)
             s+= u[index] * k[2*radius-i]
         u_convolved[x, y, θ] = s
+
+
+## Anisotropic
+
+@ti.func
+def regularise_anisotropic(
+    u: ti.template(),
+    θs: ti.template(),
+    dxy: ti.f32,
+    dθ: ti.f32,
+    σ1: ti.f32,
+    σ2: ti.f32,
+    σ3: ti.f32,
+    u_convolved: ti.template()
+):
+    """
+    @taichi.func
+    
+    Regularise `u` by convolving with a heat kernel, computed using half angle
+    distance approximations.[1]
+
+    Args:
+      Static:
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) array to be convolved.
+        `θs`: angle coordinate at each grid point.
+        `dxy`: step size in x and y direction, taking values greater than 0.
+        `dθ`: step size in orientational direction, taking values greater than
+          0.
+        `σ*`: "standard deviation" of the heat kernel in the A* direction.
+      Mutated:
+        `u_convolved`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) convolution
+          of `u` with heat kernel.
+
+    References:
+        [1]: G. Bellaard, D.L.J. Bon, G. Pai, B.M.N. Smets, and R. Duits.
+          "Analysis of (sub-)Riemannian PDE-G-CNNs". In: Journal of Mathematical
+          Imaging and Vision 65 (2023), pp. 819--843.
+          DOI:10.1007/s10851-023-01147-w.
+    """
+    # Standard deviation in pixels.
+    σD1 = σ1 / dxy
+    σD2 = σ2 / dxy
+    σD3 = σ3 / dθ
+    # Compute radii of kernel.
+    truncate = 4
+    rs = truncate * ti.math.ceil(ti.math.max(σD1, σD2), ti.i32)
+    ro = truncate * ti.math.ceil(σD3, ti.i32)
+    # Metric parameters roughly corresponding to standard deviations.
+    w1 = 1/ti.math.sqrt(2 * σD1**2)
+    w2 = 1/ti.math.sqrt(2 * σD2**2)
+    w3 = 1/ti.math.sqrt(2 * σD3**2)
+    # Group convolution definition:
+    #   (K * f)(g) := ∫ Lh K(g) f(h) dμ(h) = ∫ K(h^-1) f(g h) dμ(h).
+    for I in ti.grouped(u):
+        # Currently at p = (x, y, θ).
+        θ = θs[I]
+        s = 0.
+        norm = 0.
+        for ix in range(2*rs+1):
+            for iy in range(2*rs+1):
+                for iθ in range(2*ro+1):
+                    # Evaluate kernel at q = p + (Δx, Δy, Δθ).
+                    Δx = (-rs + ix) * dxy
+                    Δy = (-rs + iy) * dxy
+                    Δθ = (-ro + iθ) * dθ
+                    # To do so, first shift q to origin with inverse of p:
+                    #   p^-1 q = (cos(θ) Δx + sin(θ) Δy, -sin(θ) Δx + cos(θ) Δy, Δθ).
+                    # Then, we find the half angle coordinates of p^-1 q:
+                    #   b^1 := cos(θ + Δθ/2) Δx + sin(θ + Δθ/2) Δy,
+                    #   b^2 := -sin(θ + Δθ/2) Δx + cos(θ + Δθ/2) Δy,
+                    #   b^3 := Δθ.
+                    b1 = ti.math.cos(θ + Δθ/2) * Δx + ti.math.sin(θ + Δθ/2) * Δy
+                    b2 = -ti.math.sin(θ + Δθ/2) * Δx + ti.math.cos(θ + Δθ/2) * Δy
+                    b3 = Δθ
+                    # Simple distance approximation.
+                    ρsq = (w1 * b1)**2 + (w2 * b2)**2 + (w3 * b3)**2
+                    diff = ti.math.exp(-ρsq/2)
+                    norm += diff
+                    # Actually doing a correlation, but since the kernel is
+                    # symmetric, i.e. K(h^-1) = K(h), this is the same.
+                    I_step = ti.Vector([ix - rs, iy - rs, iθ - ro], ti.i32)
+                    s += u[sanitize_reflected_index(I + I_step, u)] * diff
+        u_convolved[I] = s / norm
+
+
+# Matrix Field Regularisation
 
 @ti.func
 def convolve_matrix_3_by_3_with_kernel_x_dir(
@@ -373,117 +487,6 @@ def convolve_matrix_3_by_3_with_kernel_θ_dir(
         M_convolved[x, y, θ][2, 0] = s20
         M_convolved[x, y, θ][2, 1] = s21
         M_convolved[x, y, θ][2, 2] = s22
-
-def gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):
-    """Compute kernel for 1D Gaussian derivative of order `order` at scale `σ`.
-
-    Based on the DIPlib[1] algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
-
-    Args:
-        `σ`: scale of Gaussian, taking values greater than 0.
-        `order`: order of the derivative, taking values 0 or 1.
-        `truncate`: number of scales `σ` at which kernel is truncated, taking 
-          values greater than 0.
-        `dxy`: step size in x and y direction, taking values greater than 0.
-
-    Returns:
-        Tuple ti.field(dtype=[float], shape=2*radius+1) of the Gaussian kernel
-          and the radius of the kernel.
-
-    References:
-        [1]: C. Luengo, W. Caarls, R. Ligteringen, E. Schuitema, Y. Guo,
-          E. Wernersson, F. Malmberg, S. Lokhorst, M. Wolff, G. van Kempen,
-          M. van Ginkel, L. van Vliet, B. Rieger, B. Verwer, H. Netten,
-          J. W. Brandenburg, J. Dijk, N. van den Brink, F. Faas, K. van Wijk,
-          and T. Pham. "DIPlib 3". GitHub: https://github.com/DIPlib/diplib.
-    """
-    radius = int(σ * truncate / dxy + 0.5)
-    k = ti.field(dtype=ti.f32, shape=2*radius+1)
-    match order:
-        case 0:
-            gaussian_derivative_kernel_order_0(σ, radius, dxy, k)
-        case 1:
-            gaussian_derivative_kernel_order_1(σ, radius, dxy, k)
-        case _:
-            raise(NotImplementedError(f"Order {order} has not been implemented yet; choose order 0 or 1."))
-    return k, radius
-
-@ti.kernel
-def gaussian_derivative_kernel_order_0(
-    σ: ti.f32,
-    radius: ti.i32,
-    dxy: ti.f32,
-    k: ti.template()
-):
-    """
-    @taichi.kernel
-    
-    Compute 1D Gaussian kernel at scale `σ`.
-
-    Based on the DIPlib[1] algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
-
-    Args:
-      Static:
-        `σ`: scale of Gaussian, taking values greater than 0.
-        `radius`: radius at which kernel is truncated, taking integer values
-          greater than 0.
-        `dxy`: step size in x and y direction, taking values greater than 0.
-      Mutated:
-        `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel, which is
-          updated in place.
-
-    References:
-        [1]: C. Luengo, W. Caarls, R. Ligteringen, E. Schuitema, Y. Guo,
-          E. Wernersson, F. Malmberg, S. Lokhorst, M. Wolff, G. van Kempen,
-          M. van Ginkel, L. van Vliet, B. Rieger, B. Verwer, H. Netten,
-          J. W. Brandenburg, J. Dijk, N. van den Brink, F. Faas, K. van Wijk,
-          and T. Pham. "DIPlib 3". GitHub: https://github.com/DIPlib/diplib.
-    """
-    for i in range(2*radius+1):
-        x = -radius + i
-        val = ti.math.exp(-x**2 / (2 * σ**2))
-        k[i] = val
-    normalise_field(k, 1) # /dxy
-
-@ti.kernel
-def gaussian_derivative_kernel_order_1(
-    σ: ti.f32,
-    radius: ti.i32,
-    dxy: ti.f32,
-    k: ti.template()
-):
-    """
-    @taichi.kernel
-    
-    Compute kernel for 1D Gaussian derivative of order 1 at scale `σ`.
-
-    Based on the DIPlib[1] algorithm MakeHalfGaussian: https://github.com/DIPlib/diplib/blob/a6f825a69109ae388c5f0c14e76cdb2505da4594/src/linear/gauss.cpp#L95.
-
-    Args:
-      Static:
-        `σ`: scale of Gaussian, taking values greater than 0.
-        `radius`: radius at which kernel is truncated, taking integer values
-          greater than 0.
-        `dxy`: step size in x and y direction, taking values greater than 0.
-      Mutated:
-        `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel, which is
-          updated in place.
-
-    References:
-        [1]: C. Luengo, W. Caarls, R. Ligteringen, E. Schuitema, Y. Guo,
-          E. Wernersson, F. Malmberg, S. Lokhorst, M. Wolff, G. van Kempen,
-          M. van Ginkel, L. van Vliet, B. Rieger, B. Verwer, H. Netten,
-          J. W. Brandenburg, J. Dijk, N. van den Brink, F. Faas, K. van Wijk,
-          and T. Pham. "DIPlib 3". GitHub: https://github.com/DIPlib/diplib.
-    """
-    moment = 0.
-    for i in range(2*radius+1):
-        x = -radius + i
-        val = x * ti.math.exp(-x**2 / (2 * σ**2))
-        moment += x * val
-        k[i] = val
-    divide_field(k, -moment * dxy)
-
 
 
 # Helper Functions

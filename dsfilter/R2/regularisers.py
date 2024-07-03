@@ -111,7 +111,7 @@ def gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):
     k = ti.field(dtype=ti.f32, shape=2*radius+1)
     match order:
         case 0:
-            gaussian_derivative_kernel_order_0(σ, radius, dxy, k)
+            gaussian_derivative_kernel_order_0(σ, radius, k)
         case 1:
             gaussian_derivative_kernel_order_1(σ, radius, dxy, k)
         case _:
@@ -122,7 +122,6 @@ def gaussian_derivative_kernel(σ, order, truncate=5., dxy=1.):
 def gaussian_derivative_kernel_order_0(
     σ: ti.f32,
     radius: ti.i32,
-    dxy: ti.f32,
     k: ti.template()
 ):
     """
@@ -137,7 +136,6 @@ def gaussian_derivative_kernel_order_0(
         `σ`: scale of Gaussian, taking values greater than 0.
         `radius`: radius at which kernel is truncated, taking integer values
           greater than 0.
-        `dxy`: step size in x and y direction, taking values greater than 0.
       Mutated:
         `k`: ti.field(dtype=[float], shape=2*`radius`+1) of kernel, which is
           updated in place.
@@ -153,7 +151,7 @@ def gaussian_derivative_kernel_order_0(
         x = -radius + i
         val = ti.math.exp(-x**2 / (2 * σ**2))
         k[i] = val
-    normalise_field(k, 1) # /dxy
+    normalise_field(k, 1)
 
 @ti.kernel
 def gaussian_derivative_kernel_order_1(
