@@ -30,7 +30,6 @@ from dsfilter.R2.derivatives import (
     morphological
 )
 from dsfilter.R2.regularisers import gaussian_derivative_kernel
-from dsfilter.utils import unpad_array
 
 def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
     """
@@ -158,9 +157,67 @@ def compute_timestep(dxy, δ=np.sqrt(2)-1):
           Imaging and Vision (2024).
           DOI:10.1007/s10851-024-01175-0.
     """
-    τ_D = dxy**2 / (4 - 2 * δ)
-    τ_M = dxy / (np.sqrt(2) * (1 - δ) + δ)
+    τ_D = compute_timestep_diffusion(dxy, δ)
+    τ_M = compute_timestep_shock(dxy, δ)
     return min(τ_D, τ_M) # See Theorem 1 in [2].
+
+def compute_timestep_diffusion(dxy, δ=np.sqrt(2)-1):
+    """
+    Compute timestep to solve Diffusion-Shock PDE,[1][2] such that the scheme
+    retains the maximum-minimum principle of the continuous PDE.
+    
+    Args:
+        `dxy`: step size in x and y direction, taking values greater than 0.
+      Optional:
+        `δ`: weight parameter to balance axial vs diagonal finite difference
+          schemes, taking values between 0 and 1. Defaults to `np.sqrt(2)-1`,
+          which leads to good rotation invariance according to
+          "PDE Evolutions for M-Smoothers in One, Two, and Three Dimensions"
+          (2020) by M. Welk and J. Weickert.
+    
+    Returns:
+        timestep, taking values greater than 0.
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods
+          in Computer Vision 14009 (2023), pp. 588--600.
+          DOI:10.1137/15M1018460.
+        [2]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". In: Journal of Mathematical
+          Imaging and Vision (2024).
+          DOI:10.1007/s10851-024-01175-0.
+    """
+    return dxy**2 / (4 - 2 * δ)
+
+def compute_timestep_shock(dxy, δ=np.sqrt(2)-1):
+    """
+    Compute timestep to solve Diffusion-Shock PDE,[1][2] such that the scheme
+    retains the maximum-minimum principle of the continuous PDE.
+    
+    Args:
+        `dxy`: step size in x and y direction, taking values greater than 0.
+      Optional:
+        `δ`: weight parameter to balance axial vs diagonal finite difference
+          schemes, taking values between 0 and 1. Defaults to `np.sqrt(2)-1`,
+          which leads to good rotation invariance according to
+          "PDE Evolutions for M-Smoothers in One, Two, and Three Dimensions"
+          (2020) by M. Welk and J. Weickert.
+    
+    Returns:
+        timestep, taking values greater than 0.
+
+    References:
+        [1]: K. Schaefer and J. Weickert.
+          "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods
+          in Computer Vision 14009 (2023), pp. 588--600.
+          DOI:10.1137/15M1018460.
+        [2]: K. Schaefer and J. Weickert.
+          "Regularised Diffusion-Shock Inpainting". In: Journal of Mathematical
+          Imaging and Vision (2024).
+          DOI:10.1007/s10851-024-01175-0.
+    """
+    return dxy / (np.sqrt(2) * (1 - δ) + δ)
 
 
 @ti.kernel
@@ -248,3 +305,60 @@ def fill_u_switch(
     """
     for I in ti.grouped(u_switch):
         u_switch[I] = u[I]
+
+
+# Alternative inpainting algorithms
+## Diffusion Inpainting
+        
+def diffusion_inpainting(u0_np, mask_np, dxy, T):
+    """
+    Perform Diffusion inpainting in R^2.
+
+    Args:
+        `u0_np`: np.ndarray initial condition, with shape [Nx, Ny].
+        `mask_np`: np.ndarray inpainting mask, with shape [Nx, Ny], taking
+          values 0 and 1. Wherever the value is 1, no inpainting happens.
+        `dxy`: size of pixels in the x- and y-directions.
+        `T`: time that image is evolved under the diffusion PDE.
+
+    Returns:
+        np.ndarray solution to the diffusion PDE with initial condition `u0_np`
+        at time `T`.
+    """
+    dt = compute_timestep_diffusion(dxy)
+    n = int(T / dt)
+    shape = u0_np.shape
+    u = ti.field(dtype=ti.f32, shape=shape)
+    u.from_numpy(u0_np)
+    mask =ti.field(dtype=ti.f32, shape=shape)
+    mask.from_numpy(mask_np)
+    laplacian_u = ti.field(dtype=ti.f32, shape=shape)
+    for _ in tqdm(range(n)):
+        laplacian(u, dxy, laplacian_u)
+        step_diffusion_inpainting(u, mask, dt, laplacian_u)
+    return u.to_numpy()
+    
+@ti.kernel
+def step_diffusion_inpainting(
+    u: ti.template(),
+    mask: ti.template(),
+    dt: ti.f32,
+    laplacian_u: ti.template()
+):
+    """
+    @taichi.kernel
+
+    Perform a single timestep of diffusion inpainting.
+
+    Args:
+      Static:
+        `mask`: ti.field(dtype=[float], shape=[Nx, Ny]) inpainting mask.
+        `dt`: step size, taking values greater than 0.
+        `laplacian_u`: ti.field(dtype=[float], shape=[Nx, Ny]) of laplacian of
+          `u`, which is updated in place.
+      Mutated:
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) which we want to evolve
+          with the diffusion PDE.
+    """
+    for I in ti.grouped(laplacian_u):
+        u[I] += dt * laplacian_u[I] * (1 - mask[I])
