@@ -26,11 +26,14 @@ import dsfilter.utils
 import dsfilter.visualisations
 import dsfilter.orientationscore
 import dsfilter.R2
+import dsfilter.R3
 import dsfilter.SE2
 
 # Most important functions are available at top level
 ## R2
 from dsfilter.R2.filter import DS_filter as DS_filter_R2
+## R3
+from dsfilter.R3.filter import DS_filter as DS_filter_R3
 ## SE(2)
 ### Left invariant
 from dsfilter.SE2.LI.filter import DS_filter as DS_filter_LI
