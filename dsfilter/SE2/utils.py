@@ -10,6 +10,22 @@ import numpy as np
 import taichi as ti
 from dsfilter.utils import linear_interpolate
 
+# Preprocessing
+
+def clean_mask_boundaries(u, mask):
+    """
+    Preprocesses masked data that has been lifted `u` by removing the data
+    within `mask`.
+
+    Args:
+        `u`: np.ndarray(shape=(Nx, Ny, Nθ)) masked and lifted data.
+        `mask`: np.ndarray(shape=(Nx, Ny, Nθ)) mask in which to remove data.
+    """
+    dim_K = u.shape[-1]
+    u_preprocessed = np.zeros_like(u)
+    for k in range(dim_K):
+        u_preprocessed[..., k] += mask[..., k] * u[..., k] + (1 - mask) * u[..., k].mean()
+
 # Safe Indexing
 
 @ti.func
