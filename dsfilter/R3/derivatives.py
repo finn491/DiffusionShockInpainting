@@ -31,6 +31,7 @@ from dsfilter.utils import (
 def laplacian(
     u: ti.template(),
     dxy: ti.f32,
+    dz: ti.f32,
     laplacian_u: ti.template()
 ):
     """
@@ -68,19 +69,19 @@ def laplacian(
         # 1 | -4 | 1
         # 0 |  1 | 0
         laplacian_u[I] = 1/ dxy**2 * (
-            -6 * u[I] +
+            -4 * u[I] +
             index_reflected(u, I + I_dx) +
             index_reflected(u, I - I_dx) +
             index_reflected(u, I + I_dy) +
-            index_reflected(u, I - I_dy) +
-            index_reflected(u, I + I_dz) +
-            index_reflected(u, I - I_dz)
-        )
+            index_reflected(u, I - I_dy) )
+        laplacian_u[I] += (index_reflected(u, I + I_dz) +index_reflected(u, I - I_dz) -2 * u[I] )/ dz**2 
+        
 
 @ti.kernel
 def morphological(
     u: ti.template(),
     dxy: ti.f32,
+    dz: ti.f32,
     dilation_u: ti.template(),
     erosion_u: ti.template()
 ):
@@ -121,18 +122,18 @@ def morphological(
         d_dz_backward = u[I] - index_reflected(u, I - I_dz)
         # Dilation
         ## Axial
-        dilation_u[I] = 1 / dxy * ti.math.sqrt(
-            select_upwind_derivative_dilation(d_dx_forward, d_dx_backward)**2 +
-            select_upwind_derivative_dilation(d_dy_forward, d_dy_backward)**2 +
-            select_upwind_derivative_dilation(d_dz_forward, d_dz_backward)**2
+        dilation_u[I] = ti.math.sqrt(
+            1/ dxy**2 *select_upwind_derivative_dilation(d_dx_forward, d_dx_backward)**2 +
+            1/ dxy**2 *select_upwind_derivative_dilation(d_dy_forward, d_dy_backward)**2 +
+            1/ dz**2 *select_upwind_derivative_dilation(d_dz_forward, d_dz_backward)**2 
         )
 
         # Erosion
         ## Axial
-        erosion_u[I] = -1 / dxy * ti.math.sqrt(
-            select_upwind_derivative_erosion(d_dx_forward, d_dx_backward)**2 +
-            select_upwind_derivative_erosion(d_dy_forward, d_dy_backward)**2 +
-            select_upwind_derivative_erosion(d_dz_forward, d_dz_backward)**2
+        erosion_u[I] =  -ti.math.sqrt(
+            1/ dxy**2 *select_upwind_derivative_erosion(d_dx_forward, d_dx_backward)**2 +
+            1/ dxy**2 *select_upwind_derivative_erosion(d_dy_forward, d_dy_backward)**2 +
+            1/ dz**2 * select_upwind_derivative_erosion(d_dz_forward, d_dz_backward)**2 
         )
 
 
@@ -140,6 +141,7 @@ def morphological(
 def central_derivatives_first_order(
     u: ti.template(),
     dxy: ti.f32,
+    dz: ti.f32,
     d_dx: ti.template(),
     d_dy: ti.template(),
     d_dz: ti.template(),
@@ -183,12 +185,13 @@ def central_derivatives_first_order(
         d_dz[I] = (
             u[I_dz_forward] -
             u[I_dz_backward]
-        ) / (dxy*2)
+        ) / (dz*2)
 
 @ti.func
 def central_derivatives_second_order(
     u: ti.template(),
     dxy: ti.f32,
+    dz: ti.f32,
     d_dxx: ti.template(),
     d_dxy: ti.template(),
     d_dyy: ti.template(),
@@ -260,14 +263,14 @@ def central_derivatives_second_order(
             u[I_dminus_forwardxz] -
             u[I_dminus_backwardxz] +
             u[I_dplus_backwardxz]
-        ) / (4* dxy**2)
+        ) / (4* dxy*dz)
 
         d_dyz[I] = (
             u[I_dplus_forwardyz] -
             u[I_dminus_forwardyz] -
             u[I_dminus_backwardyz] +
             u[I_dplus_backwardyz]
-        ) / (4* dxy**2)
+        ) / (4* dxy*dz)
 
         d_dyy[I] = (
             u[I_dy_forward] -
@@ -279,4 +282,4 @@ def central_derivatives_second_order(
             u[I_dz_forward] -
             u[I] * 2 +
             u[I_dz_backward]
-        ) / dxy**2
+        ) / dz**2

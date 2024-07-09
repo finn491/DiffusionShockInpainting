@@ -43,8 +43,11 @@ from dsfilter.utils import (
 def DS_switch(
     u: ti.template(),
     dxy: ti.f32,
+    dz: ti.f32,
     k: ti.template(),
     radius: ti.i32,
+    kz: ti.template(),
+    radiusz: ti.i32,
     λ: ti.f32,
     d_dx: ti.template(),
     d_dy: ti.template(),
@@ -86,7 +89,7 @@ def DS_switch(
     # First regularise with Gaussian convolution.
     convolve_with_kernel_x_dir(u, k, radius, convolution_storage)
     convolve_with_kernel_y_dir(convolution_storage, k, radius, convolution_storage2)
-    convolve_with_kernel_z_dir(convolution_storage2, k, radius, switch)
+    convolve_with_kernel_z_dir(convolution_storage2, kz, radiusz, switch)
     # Then compute gradient with Sobel operators.
     I_dx = ti.Vector([1, 0, 0], dt=ti.i32)
     I_dy = ti.Vector([0, 1, 0], dt=ti.i32)
@@ -100,7 +103,7 @@ def DS_switch(
         I_dz_backward = sanitize_index(I - I_dz, u) 
         d_dx[I] = 0.5 * (u[I_dx_forward] - u[I_dx_backward]) / dxy
         d_dy[I] = 0.5 * (u[I_dy_forward] - u[I_dy_backward]) / dxy
-        d_dz[I] = 0.5 * (u[I_dz_forward] - u[I_dz_backward]) / dxy
+        d_dz[I] = 0.5 * (u[I_dz_forward] - u[I_dz_backward]) / dz
         switch[I] = g_scalar(d_dx[I]**2 + d_dy[I]**2 + d_dz[I]**2, λ)
 
 # Morphological
@@ -112,14 +115,19 @@ def morphological_switch(
     u: ti.template(),
     u_σ: ti.template(),
     dxy: ti.f32,
+    dz: ti.f32,
     ε: ti.f32,
     k_int: ti.template(),
     radius_int: ti.i32,
+    k_intz: ti.template(),
+    radius_intz: ti.i32,
     d_dx: ti.template(),
     d_dy: ti.template(),
     d_dz: ti.template(),
     k_ext: ti.template(),
     radius_ext: ti.template(),
+    k_extz: ti.template(),
+    radius_extz: ti.template(),
     d_dxx: ti.template(),
     d_dxy: ti.template(),
     d_dyy: ti.template(),
@@ -186,14 +194,14 @@ def morphological_switch(
     #presmooth image 
     convolve_with_kernel_x_dir(u, k_int, radius_int, convolution_storage)
     convolve_with_kernel_y_dir(convolution_storage, k_int, radius_int, convolution_storage2)  
-    convolve_with_kernel_z_dir(convolution_storage2, k_int, radius_int, switch)        
+    convolve_with_kernel_z_dir(convolution_storage2, k_intz, radius_intz, switch)        
     # compute entries of the structure tensor
 
-    central_derivatives_first_order(u, dxy, d_dx, d_dy, d_dz)       
+    central_derivatives_first_order(u, dxy, dz, d_dx, d_dy, d_dz)       
 
     # Compute second derivative of u_σ in the direction of the dominant
     # eigenvector.
-    central_derivatives_second_order(switch, dxy, d_dxx, d_dxy, d_dyy, d_dxz, d_dyz, d_dzz)
+    central_derivatives_second_order(switch, dxy, dz, d_dxx, d_dxy, d_dyy, d_dxz, d_dyz, d_dzz)
 
     for I in ti.grouped(switch):  
         # a = numpy.ones(switch.shape)

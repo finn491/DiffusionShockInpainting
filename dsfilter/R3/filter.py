@@ -32,7 +32,7 @@ from dsfilter.R3.derivatives import (
 from dsfilter.R3.regularisers import gaussian_derivative_kernel
 from dsfilter.utils import unpad_array
 
-def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
+def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1., dz = 1.):
     """
     Perform Diffusion-Shock inpainting in R^2, according to Schaefer and
     Weickert.[1][2]
@@ -73,12 +73,17 @@ def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
           DOI:10.1007/s10851-024-01175-0.
     """
     # Set hyperparameters
-    dt = 0.1
+    factor = 0.05
+    dt = 0.05
     n = int(T / dt)
     # We reuse the Gaussian kernels
     k_DS, radius_DS = gaussian_derivative_kernel(ν, 0)
     k_morph_int, radius_morph_int = gaussian_derivative_kernel(σ, 0)
     k_morph_ext, radius_morph_ext = gaussian_derivative_kernel(ρ, 0)
+
+    k_DSz, radius_DSz = gaussian_derivative_kernel(ν*factor, 0, dxy = dz)
+    k_morph_intz, radius_morph_intz = gaussian_derivative_kernel(σ*factor, 0, dxy = dz)
+    k_morph_extz, radius_morph_extz = gaussian_derivative_kernel(ρ*factor, 0, dxy = dz)
 
     # Initialise TaiChi objects
     shape = u0_np.shape
@@ -127,13 +132,13 @@ def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
 
     for _ in tqdm(range(n)):
         # Compute switches
-        DS_switch(u_switch, dxy, k_DS, radius_DS, λ, d_dx_DS, d_dy_DS, d_dz_DS, switch_DS, convolution_storage, convolution_storage2)
-        morphological_switch(u_switch, u_σ, dxy, ε, k_morph_int, radius_morph_int, d_dx_morph, d_dy_morph, d_dz_morph, k_morph_ext,
-                             radius_morph_ext, d_dxx, d_dxy, d_dyy, d_dxz, d_dyz, d_dzz, switch_morph,
+        DS_switch(u_switch, dxy, dz, k_DS, radius_DS, k_DSz, radius_DSz, λ, d_dx_DS, d_dy_DS, d_dz_DS, switch_DS, convolution_storage, convolution_storage2)
+        morphological_switch(u_switch, u_σ, dxy, dz, ε, k_morph_int, radius_morph_int, k_morph_intz, radius_morph_intz, d_dx_morph, d_dy_morph, d_dz_morph, k_morph_ext,
+                             radius_morph_ext, k_morph_extz, radius_morph_extz, d_dxx, d_dxy, d_dyy, d_dxz, d_dyz, d_dzz, switch_morph,
                              convolution_storage, convolution_storage2, dxdx, dxdy, dydy,dxdz,dydz,dzdz)
         # Compute derivatives
-        laplacian(u, dxy, laplacian_u)
-        morphological(u, dxy, dilation_u, erosion_u)
+        laplacian(u, dxy, dz, laplacian_u)
+        morphological(u, dxy, dz,  dilation_u, erosion_u)
         # Step
         step_DS_filter(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
         # Update fields for switches
@@ -193,6 +198,8 @@ def step_DS_filter(
     """
     for I in ti.grouped(du_dt):
         assert switch_DS[I] <=1, 'assert ds'
+        assert switch_morph[I] <=1, 'assert ds1'
+        assert switch_morph[I] >=-1, 'assert ds2'
         du_dt[I] = (
             laplacian_u[I] * switch_DS[I] +
             (1 - switch_DS[I]) * (
@@ -202,7 +209,6 @@ def step_DS_filter(
                 dilation_u[I] * (switch_morph[I] < 0.) 
             ) 
         )
-        
         if mask[I] < 1:
           u[I] += dt * du_dt[I] # Only change values in the mask.
         
