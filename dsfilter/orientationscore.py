@@ -17,6 +17,12 @@
 import numpy as np
 import scipy as sp
 
+def rotate_left(array, rotation_amount):
+    return np.roll(array, -rotation_amount, axis=(0, 1))
+    
+def rotate_right(array, rotation_amount):
+    return np.roll(array, +rotation_amount, axis=(0, 1))
+
 def mod_offset(x, period, offset):
     """Compute `x` modulo `period` with offset `offset`."""
     return x - (x - offset)//period * period
@@ -68,7 +74,7 @@ def radial_window(N_spatial, n, inflection_point):
         s = s + exp_ρ_squared * ρ_matrix**(2*k) / sp.special.factorial(k)
     return s
 
-def B_spline_matrix(n, x):
+def B_spline_higher_order(n, x):
     """
     Compute degree `n` B-splines.
 
@@ -98,6 +104,45 @@ def B_spline_matrix(n, x):
         interval_check = (x >= (i - 1/2 + ε)) * (x <= (i + 1/2 - ε * (i >= n / 2)))                     
         r += f * np.round(interval_check)
     return r
+
+def B_spline(n, x):
+    """
+    Compute degree `n` B-splines.
+
+    In this way, the sum of all cakewavelets in the Fourier domain is
+    identically equal to 1 (within the disk M), while each cakewavelet varies
+    smoothly in the angular direction in the Fourier domain. See Section 4.6
+    in Duits "Perceptual Organization in Image Analysis" (2005).
+
+    For degree `n` <= 3, we use explicit formulae. For higher orders, a
+    recursive algorithm is used.
+    """
+    # if not isinstance(n, int) or n < 0:
+    #     raise ValueError("n must be a positive integer")
+    match n:
+        case 0:
+            b = 1 * (-1/2 <= x) * (x < 1/2)
+        case 1:
+            b = (
+                (1. + x) * (-1. <= x) * (x < 0.) +
+                (1. - x) * (0. <= x)  * (x < 1.)
+            )
+        case 2:
+            b = (
+                ((3/2 + x)**2)/2 * (-3/2 <= x) * (x < -1/2) +
+                (3/4 - x**2)     * (-1/2 <= x) * (x < 1/2) +
+                ((3/2 - x)**2)/2 * (1/2 <= x)  * (x < 3/2)
+            )
+        case 3:
+            b = (
+                ((2. + x)**3)/6         * (-2. <= x) * (x < -1.) + 
+                (2/3 - x**2 - (x**3)/2) * (-1. <= x) * (x < -0.) + 
+                (2/3 - x**2 + (x**3)/2) * (0. <= x)  * (x < 1.)  + 
+                ((2. - x)**3)/6         * (1. <= x)  * (x < 2.)
+            )
+        case _:
+            b = B_spline_higher_order(n, x)
+    return b
 
 def cakewavelet_stack_fourier(N_spatial, dθ, spline_order, overlap_factor, inflection_point, mn_order):
     """
@@ -130,8 +175,44 @@ def cakewavelet_stack_fourier(N_spatial, dθ, spline_order, overlap_factor, infl
     filters = np.zeros((θs.shape[0], N_spatial, N_spatial))
     for i, θ in enumerate(θs):
         x = mod_offset(angle_grid - θ - np.pi / 2, 2 * np.pi, -np.pi) / dθ
-        filters[i] = window * B_spline_matrix(spline_order, x)
+        filters[i] = window * B_spline(spline_order, x)
     return filters
+
+# 😢
+# def cakewavelet_stack_fourier(N_spatial, dθ, spline_order, overlap_factor, inflection_point, mn_order):
+#     """
+#     Compute the cakewavelets in the Fourier domain.
+
+#     Args:
+#         `N_spatial`: number of pixels in each spatial direction. This notably
+#           means that the support of the wavelets will be a square.
+#         `dθ`: angular resolution in radians.
+#         `spline_order`: degree of the B-splines.
+#         `overlap_factor`: degree to which adjacent slices overlap in the
+#           angular direction. When `overlap_factor` is larger than 1, then
+#           multiple wavelets will cover the same angles.
+#         `inflection_point`: point at which the radial window M_N starts to
+#           decrease, taking values at most 1. By increasing this will improve the
+#           stability of the reconstruction, but the L^1 norm of the cakewavelets
+#           will also increase.
+#         `mn_order`: order at which the geometric sum in the radial window is
+#           truncated.
+#         `DC_σ`: standard deviation of the high pass filter used to remove the
+#           DC component, such that the cakewavelets can be constructed around
+#           the origin in the Fourier domain.
+#     """
+#     mn_window = radial_window(N_spatial, mn_order, inflection_point)
+#     window =  mn_window
+#     angle_grid = angular_grid(N_spatial)
+#     dθ_overlapped = dθ / overlap_factor
+#     s = 2 * np.pi
+#     θs = np.arange(0, s, dθ_overlapped)
+#     expanded_shape = (*θs.shape, *angle_grid.shape)
+#     angle_grid_expanded = angle_grid[None, ...] * np.ones(expanded_shape)
+#     θs_expanded = θs[..., None, None] * np.ones(expanded_shape)
+#     x = mod_offset(angle_grid_expanded - θs_expanded - np.pi / 2, 2 * np.pi, -np.pi) / dθ
+#     filters = window[None, ...] * B_spline(spline_order, x)
+#     return filters
 
 def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_order=3, overlap_factor=1,
                       Gaussian_σ=None):
@@ -146,7 +227,7 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
         `inflection_point`: point at which the radial window M_N starts to
           decrease, taking values at most 1. By increasing this will improve the
           stability of the reconstruction, but the L^1 norm of the cakewavelets
-          will also increase. Defaults to 0.8
+          will also increase. Defaults to 0.8.
         `mn_order`: order at which the geometric sum in the radial window is
           truncated. Defaults to 10.
         `spline_order`: degree of the B-splines. Defaults to 3.
@@ -163,16 +244,13 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
     dθ = 2 * np.pi / Nθ
     cake_fourier = cakewavelet_stack_fourier(N_spatial, dθ, spline_order, overlap_factor, inflection_point, mn_order)
 
-    # Smooth out at origin in Fourier domain.
     cake_fourier[:, (N_spatial//2 - 2):(N_spatial//2 + 3), (N_spatial//2 - 2):(N_spatial//2 + 3)] = dθ / (2 * np.pi)
 
     cake = np.zeros_like(cake_fourier, dtype=np.complex_)
     rotation_amount = np.array((N_spatial // 2, N_spatial // 2))
     window = Gauss_window(N_spatial, Gaussian_σ)
     for i, slice_fourier in enumerate(cake_fourier):
-        # The Fourier transform in NumPy is not centered, so we have to uncenter
-        # the wavelet, moving it to the lower left corner.
-        slice_fourier = np.roll(slice_fourier, -rotation_amount, axis=(0, 1)) # rotate left
+        slice_fourier = rotate_left(slice_fourier, rotation_amount)
         # Mathematica uses Fourier parameters {a, b} = {0, 1} by default, while
         # NumPy uses {a, b} = {1, -1}. The inverse Fourier transform is then
         # given by (http://reference.wolfram.com/language/ref/InverseFourier.html)
@@ -186,8 +264,7 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
         # However, if we use NumPy's convention, we can forget about n when
         # performing convolutions, so we don't multiply by n^(1/2).
         slice = np.conj(np.fft.ifftn(slice_fourier))
-        # Recenter the cakewavelet.
-        slice = np.roll(slice, +rotation_amount, axis=(0, 1)) # rotate right
+        slice = rotate_right(slice_fourier, rotation_amount)
         cake[i] = slice * window
 
     return cake
@@ -204,7 +281,7 @@ def wavelet_transform(f, kernels):
     for i, ψ_θ in enumerate(kernels):
         ψ_θ_hat = np.fft.fftn(np.flip(ψ_θ, axis=(0, 1)))
         U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat).real
-        U_θ_hat = np.roll(U_θ_hat, +rotation_amount, axis=(0, 1)) # rotate right
+        U_θ_hat = rotate_right(U_θ_hat, rotation_amount)
         ost[i] = U_θ_hat
     return ost
 
@@ -219,6 +296,6 @@ def wavelet_transform_complex(f, kernels):
     for i, ψ_θ in enumerate(kernels):
         ψ_θ_hat = np.fft.fftn(np.flip(ψ_θ, axis=(0, 1)))
         U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat)
-        U_θ_hat = np.roll(U_θ_hat, +rotation_amount, axis=(0, 1)) # rotate right
+        U_θ_hat = rotate_right(U_θ_hat, rotation_amount)
         ost[i] = U_θ_hat
     return ost
