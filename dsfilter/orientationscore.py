@@ -264,7 +264,7 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
         # However, if we use NumPy's convention, we can forget about n when
         # performing convolutions, so we don't multiply by n^(1/2).
         slice = np.conj(np.fft.ifftn(slice_fourier))
-        slice = rotate_right(slice_fourier, rotation_amount)
+        slice = rotate_right(slice, rotation_amount)
         cake[i] = slice * window
 
     return cake
