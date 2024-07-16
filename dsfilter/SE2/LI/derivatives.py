@@ -219,7 +219,7 @@ def morphological_s(
       Static:
         `u`: ti.field(dtype=[float], shape=[Nx+2, Ny+2, Nθ]) which we want to 
           differentiate.
-        `G_inv`: ti.types.vector(n=3, dtype=[float]) spatial constants of the
+        `G_inv`: ti.types.vector(n=2, dtype=[float]) spatial constants of the
           inverse of the diagonal metric tensor with respect to left invariant
           basis.
         `θs`: angle coordinate at each grid point.
