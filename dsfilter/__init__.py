@@ -37,3 +37,4 @@ from dsfilter.R3.filter import DS_filter as DS_filter_R3
 ## SE(2)
 ### Left invariant
 from dsfilter.SE2.LI.filter import DS_filter as DS_filter_LI
+from dsfilter.SE2.LI.filter import DS_filter_spatial as DS_filter_spatial
