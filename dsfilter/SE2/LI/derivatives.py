@@ -9,6 +9,11 @@
 
 import taichi as ti
 from dsfilter.SE2.utils import scalar_trilinear_interpolate
+from dsfilter.SE2.regularisers import (
+    convolve_with_kernel_x_dir,
+    convolve_with_kernel_y_dir,
+    convolve_with_kernel_θ_dir
+)
 from dsfilter.utils import (
     select_upwind_derivative_dilation,
     select_upwind_derivative_erosion
@@ -544,3 +549,86 @@ def laplace_perp_o(
                 scalar_trilinear_interpolate(u, I + I_A3) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_A3)
             ) / dθ**2
         )
+
+@ti.kernel
+def TV(
+    u: ti.template(),
+    G_inv: ti.types.vector(3, ti.f32),
+    dxy: ti.f32,
+    dθ: ti.f32,
+    θs: ti.template(),
+    k_s: ti.template(),
+    radius_s: ti.template(),
+    k_o: ti.template(),
+    radius_o: ti.template(),
+    A1_u: ti.template(),
+    A2_u: ti.template(),
+    A3_u: ti.template(),
+    grad_norm_u: ti.template(),
+    normalised_grad_1: ti.template(),
+    normalised_grad_2: ti.template(),
+    normalised_grad_3: ti.template(),
+    TV_u: ti.template(),
+    storage: ti.template()
+):
+    """
+    @taichi.kernel
+
+    Compute an approximation of the Total Variation (TV) operator applied to `u`
+    using central differences.
+
+    Args:
+      Static:
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) which we want to
+          differentiate.
+        `G_inv`: ti.types.vector(n=3, dtype=[float]) constants of the inverse of
+          the diagonal metric tensor with respect to left invariant basis.
+        `dxy`: step size in x and y direction, taking values greater than 0.
+        `dθ`: step size in orientational direction, taking values greater than
+          0.
+        `θs`: angle coordinate at each grid point.
+      Mutated:
+        `TV_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) laplacian of
+          u, which is updated in place.
+    """
+    I_A3 = ti.Vector([0.0,  0.0, 1.0], dt=ti.f32) / 2
+    for I in ti.grouped(A1_u):
+        θ = θs[I]
+        cos = ti.math.cos(θ)
+        sin = ti.math.sin(θ)
+        I_A1 = ti.Vector([cos, sin, 0.0], dt=ti.f32) / 2
+        I_A2 = ti.Vector([-sin, cos, 0.0], dt=ti.f32) / 2
+
+        c1 = (scalar_trilinear_interpolate(u, I + I_A1) -
+              scalar_trilinear_interpolate(u, I - I_A1)) / dxy
+        c2 = (scalar_trilinear_interpolate(u, I + I_A2) -
+              scalar_trilinear_interpolate(u, I - I_A2)) / dxy
+        c3 = (scalar_trilinear_interpolate(u, I + I_A3) -
+              scalar_trilinear_interpolate(u, I - I_A3)) / dθ
+        A1_u[I] = c1
+        A2_u[I] = c2
+        A3_u[I] = c3
+        grad_norm_u[I] = ti.math.sqrt(G_inv[0] * c1**2 + G_inv[1] * c2**2 + G_inv[2] * c3**2)
+    convolve_with_kernel_x_dir(grad_norm_u, k_s, radius_s, TV_u)
+    convolve_with_kernel_y_dir(TV_u, k_s, radius_s, storage)
+    convolve_with_kernel_θ_dir(storage, k_o, radius_o, grad_norm_u)
+
+    for I in ti.grouped(normalised_grad_1):
+        normalised_grad_1[I] = G_inv[0] * A1_u[I] / (grad_norm_u[I] + 10**-5)
+        normalised_grad_2[I] = G_inv[1] * A2_u[I] / (grad_norm_u[I] + 10**-5)
+        normalised_grad_3[I] = G_inv[2] * A3_u[I] / (grad_norm_u[I] + 10**-5)
+
+    for I in ti.grouped(TV_u):
+        θ = θs[I]
+        cos = ti.math.cos(θ)
+        sin = ti.math.sin(θ)
+        I_A1 = ti.Vector([cos, sin, 0.0], dt=ti.f32) / 2
+        I_A2 = ti.Vector([-sin, cos, 0.0], dt=ti.f32) / 2
+
+        divnormgrad1 = (scalar_trilinear_interpolate(normalised_grad_1, I + I_A1) -
+                        scalar_trilinear_interpolate(normalised_grad_1, I - I_A1)) / dxy
+        divnormgrad2 = (scalar_trilinear_interpolate(normalised_grad_2, I + I_A2) -
+                        scalar_trilinear_interpolate(normalised_grad_2, I - I_A2)) / dxy
+        divnormgrad3 = (scalar_trilinear_interpolate(normalised_grad_3, I + I_A3) -
+                        scalar_trilinear_interpolate(normalised_grad_3, I - I_A3)) / dθ
+        TV_u[I] = divnormgrad1 + divnormgrad2 + divnormgrad3

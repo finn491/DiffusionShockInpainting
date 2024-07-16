@@ -41,6 +41,7 @@ from dsfilter.SE2.LI.derivatives import (
     morphological,
     morphological_s,
     morphological_o,
+    TV
 )
 from dsfilter.SE2.regularisers import gaussian_derivative_kernel
 
@@ -697,6 +698,102 @@ def step_shock_inpainting(
                 # Do dilation when switch_morph = -1.
                 dilation_U[I] * (switch[I] < 0.) * ti.abs(switch[I])
             ) * (1 - mask[I])
+
+# TV-Flow
+
+def TV_inpainting(u0_np, mask_np, G_inv_np, dxy, dθ, θs_np, σ_s, σ_o, T):
+    """
+    Perform Total Variation (TV) Flow inpainting in SE(2).
+
+    Args:
+        `u0_np`: np.ndarray initial condition, with shape [Nx, Ny, Nθ].
+        `mask_np`: np.ndarray inpainting mask, with shape [Nx, Ny, Nθ], taking
+          values 0 and 1. Wherever the value is 1, no inpainting happens.
+        `θs_np`: np.ndarray orientation coordinate θ throughout the domain.
+        `G_inv_np`: np.ndarray(shape=(3,), dtype=[float]) of constants of the
+          inverse of the diagonal metric tensor with respect to left invariant
+          basis used to define the shock.
+        `dxy`: size of pixels in the x- and y-directions.
+        `dθ`: size of pixels in the θ-direction.
+        `σ_s`: standard deviation of the internal regularisation in the spatial
+          direction of the perpendicular laplacian, used for determining whether
+          to perform dilation or erosion.
+        `σ_o`: standard deviation of the internal regularisation in the
+          orientational direction of the perpendicular laplacian.
+        `T`: time that image is evolved under the DS PDE.
+
+    Returns:
+        np.ndarray solution to the DS PDE with initial condition `u0_np` at
+        time `T`.
+    """
+    dt = compute_timestep_TV(dxy, dθ, G_inv_np)
+    n = int(T / dt)
+    k_s, radius_s = gaussian_derivative_kernel(σ_s, 0)
+    k_o, radius_o = gaussian_derivative_kernel(σ_o, 0)
+    shape = u0_np.shape
+    u = ti.field(dtype=ti.f32, shape=shape)
+    u.from_numpy(u0_np)
+    mask =ti.field(dtype=ti.f32, shape=shape)
+    mask.from_numpy(mask_np)
+    G_inv = ti.Matrix(G_inv_np, dt=ti.f32)
+    θs = ti.field(dtype=ti.f32, shape=shape)
+    θs.from_numpy(θs_np)
+    A1_u = ti.field(dtype=ti.f32, shape=shape)
+    A2_u = ti.field(dtype=ti.f32, shape=shape)
+    A3_u = ti.field(dtype=ti.f32, shape=shape)
+    grad_norm_u = ti.field(dtype=ti.f32, shape=shape)
+    normalised_grad_1 = ti.field(dtype=ti.f32, shape=shape)
+    normalised_grad_2 = ti.field(dtype=ti.f32, shape=shape)
+    normalised_grad_3 = ti.field(dtype=ti.f32, shape=shape)
+    TV_u = ti.field(dtype=ti.f32, shape=shape)
+    storage = ti.field(dtype=ti.f32, shape=shape)
+
+    for _ in tqdm(range(n)):
+        TV(u, G_inv, dxy, dθ, θs, k_s, radius_s, k_o, radius_o, A1_u, A2_u, A3_u, grad_norm_u, normalised_grad_1,
+           normalised_grad_2, normalised_grad_3, TV_u, storage)
+        step_TV_inpainting(u, mask, dt, TV_u)
+    return u.to_numpy()
+    
+@ti.kernel
+def step_TV_inpainting(
+    u: ti.template(),
+    mask: ti.template(),
+    dt: ti.f32,
+    TV_u: ti.template(),
+):
+    """
+    @taichi.kernel
+
+    Perform a single timestep of SE(2) Shock inpainting.
+
+    Args:
+      Static:
+        `mask`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) inpainting mask.
+        `dt`: step size, taking values greater than 0.
+        `TV_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) of 
+          div(grad `u` / ||grad `u`||), which is updated in place.
+      Mutated:
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) which we want to evolve
+          with the shock PDE.
+    """
+    for I in ti.grouped(TV_u):
+        u[I] += dt * TV_u[I] * (1 - mask[I])
+
+def compute_timestep_TV(dxy, dθ, G_inv):
+    """
+    Compute timestep to solve TV flow.
+    
+    Args:
+        `dxy`: step size in x and y direction, taking values greater than 0.
+        `dθ`: step size in θ direction, taking values greater than 0.
+        `G_inv_np`: np.ndarray(shape=(3,), dtype=[float]) of constants of the
+          inverse of the diagonal metric tensor with respect to left invariant
+          basis used to define the TV flow.
+    
+    Returns:
+        timestep, taking values greater than 0.
+    """
+    return dxy**2 * dθ / (2 * ((G_inv[0] + G_inv[1]) * dxy + G_inv[2] * dθ))
 
 # Fix padding function
 
