@@ -266,36 +266,23 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
         slice = np.conj(np.fft.ifftn(slice_fourier))
         slice = rotate_right(slice, rotation_amount)
         cake[i] = slice * window
-
     return cake
-    
-def wavelet_transform(f, kernels):
-    """
-    Return the real part of the wavelet transform of image `f` under the
-    `kernels`.
-    """
-    N_spatial = f.shape[0]
-    ost = np.zeros((kernels.shape[0], N_spatial, N_spatial))
-    f_hat = np.fft.fftn(f)
-    rotation_amount = np.ceil(0.1 + np.array(f.shape) / 2).astype(int)
-    for i, ψ_θ in enumerate(kernels):
-        ψ_θ_hat = np.fft.fftn(np.flip(ψ_θ, axis=(0, 1)))
-        U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat).real
-        U_θ_hat = rotate_right(U_θ_hat, rotation_amount)
-        ost[i] = U_θ_hat
-    return ost
-
-def wavelet_transform_complex(f, kernels):
-    """
-    Return the wavelet transform of image `f` under the `kernels`.
-    """
-    N_spatial = f.shape[0]
-    ost = np.zeros((kernels.shape[0], N_spatial, N_spatial), dtype=np.complex_)
-    f_hat = np.fft.fftn(f)
-    rotation_amount = np.ceil(0.1 + np.array(f.shape) / 2).astype(int)
-    for i, ψ_θ in enumerate(kernels):
-        ψ_θ_hat = np.fft.fftn(np.flip(ψ_θ, axis=(0, 1)))
-        U_θ_hat = np.fft.ifftn(ψ_θ_hat * f_hat)
-        U_θ_hat = rotate_right(U_θ_hat, rotation_amount)
-        ost[i] = U_θ_hat
+   
+def wavelet_transform(f, kernels, shift=-1):
+    """Return the wavelet transform of image `f` under the `kernels`."""
+    shape = f.shape
+    ost = np.zeros((kernels.shape[0], *shape), dtype=np.complex_)
+    if kernels.shape[1:] == shape: # Compute by Fourier Transform.
+        f_hat = np.fft.fftn(f)
+        rotation_amount = np.ceil(0.1 + np.array(shape) / 2).astype(int)
+        for i, ψ_θ in enumerate(kernels):
+            ψ_θ_hat = np.fft.fftn(np.flip(ψ_θ, axis=(0, 1)))
+            U_θ = np.fft.ifftn(ψ_θ_hat * f_hat)
+            U_θ = rotate_right(U_θ, rotation_amount)
+            ost[i] = U_θ
+    else: # Compute by direct correlation.
+        if kernels.shape[1] % 2 == 0:
+            kernels = np.roll(kernels, shift=shift, axis=(1, 2)) # Ew.
+        for i, ψ_θ in enumerate(kernels):
+            ost[i] = sp.signal.convolve(f, ψ_θ, mode="same", method="fft")
     return ost
