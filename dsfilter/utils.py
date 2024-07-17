@@ -16,7 +16,7 @@ import taichi as ti
 def linear_interpolate(
     v0: ti.f32,
     v1: ti.f32,
-    r: ti.i32
+    r: ti.f32
 ) -> ti.f32:
     """
     @taichi.func

@@ -54,6 +54,32 @@ def sanitize_index(
         ti.math.mod(index[2], shape[2])
     ], dt=ti.i32)
 
+# @ti.func
+# def sanitize_reflected_index(
+#     index: ti.types.vector(3, ti.f32),
+#     input: ti.template()
+# ) -> ti.types.vector(3, ti.f32):
+#     """
+#     @taichi.func
+    
+#     Make sure the `index` is inside the shape of `input`, while reflecting at
+#     the boundaries.
+
+#     Args:
+#         `index`: ti.types.vector(n=3, dtype=ti.i32) index.
+#         `input`: ti.field in which we want to index.
+
+#     Returns:
+#         ti.types.vector(n=3, dtype=ti.i32) of index that is within `input`.
+#     """
+#     I, J, K = index
+#     I_max, J_max, K_max = ti.Vector(ti.static(input.shape), dt=ti.f32) - ti.Vector([1., 1., 1.], dt=ti.f32)
+#     return ti.Vector([
+#         -I * (I < 0) + I * (0 <= I <= I_max) + (2 * I_max - I) * (I > I_max),
+#         -J * (J < 0) + J * (0 <= J <= J_max) + (2 * J_max - J) * (J > J_max),
+#         ti.math.mod(K, K_max + 1)
+#     ], dt=ti.f32)
+
 @ti.func
 def sanitize_reflected_index(
     index: ti.types.vector(3, ti.i32),
@@ -92,7 +118,7 @@ def trilinear_interpolate(
     v101: ti.f32, 
     v110: ti.f32, 
     v111: ti.f32,
-    r: ti.types.vector(3, ti.i32)
+    r: ti.types.vector(3, ti.f32)
 ) -> ti.f32:
     """
     @taichi.func
@@ -121,6 +147,46 @@ def trilinear_interpolate(
     v = linear_interpolate(v0, v1, r[2])
 
     return v
+
+# @ti.func
+# def scalar_trilinear_interpolate(
+#     input: ti.template(), 
+#     index: ti.types.vector(3, ti.f32)
+# ) -> ti.f32:
+#     """
+#     @taichi.func
+
+#     Interpolate value of `input` at continuous `index` trilinearly, via repeated
+#     linear interpolation (x, y, θ). Copied from Gijs Bellaard.
+
+#     Args:
+#         `input`: ti.field(dtype=[float]) in which we want to interpolate.
+#         `index`: ti.types.vector(n=3, dtype=ti.f32) continuous index at which we 
+#           want to interpolate.
+
+#     Returns:
+#         Value of `input` interpolated at `index`.
+#     """
+#     index = sanitize_reflected_index(index, input) # Mirror boundary conditions
+
+#     r = ti.math.fract(index)
+
+#     f = ti.math.floor(index, ti.i32)
+
+#     c = ti.math.ceil(index, ti.i32)
+    
+#     v000 = input[f[0], f[1], f[2]]
+#     v001 = input[f[0], f[1], c[2]]
+#     v010 = input[f[0], c[1], f[2]]
+#     v011 = input[f[0], c[1], c[2]]
+#     v100 = input[c[0], f[1], f[2]]
+#     v101 = input[c[0], f[1], c[2]]
+#     v110 = input[c[0], c[1], f[2]]
+#     v111 = input[c[0], c[1], c[2]]
+
+#     v = trilinear_interpolate(v000, v001, v010, v011, v100, v101, v110, v111, r)
+
+#     return v
 
 @ti.func
 def scalar_trilinear_interpolate(

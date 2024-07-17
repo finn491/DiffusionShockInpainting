@@ -88,7 +88,7 @@ def bilinear_interpolate(
     v01: ti.f32,
     v10: ti.f32,
     v11: ti.f32,
-    r: ti.types.vector(2, ti.i32)
+    r: ti.types.vector(2, ti.f32)
 ) -> ti.f32:
     """
     @taichi.func
