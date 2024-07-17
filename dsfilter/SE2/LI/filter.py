@@ -701,7 +701,7 @@ def step_shock_inpainting(
 
 # TV-Flow
 
-def TV_inpainting(u0_np, mask_np, G_inv_np, dxy, dθ, θs_np, σ_s, σ_o, T):
+def TV_inpainting(u0_np, mask_np, G_inv_np, dxy, dθ, θs_np, σ_s, σ_o, T, dt=None):
     """
     Perform Total Variation (TV) Flow inpainting in SE(2).
 
@@ -726,7 +726,9 @@ def TV_inpainting(u0_np, mask_np, G_inv_np, dxy, dθ, θs_np, σ_s, σ_o, T):
         np.ndarray solution to the DS PDE with initial condition `u0_np` at
         time `T`.
     """
-    dt = compute_timestep_TV(dxy, dθ, G_inv_np)
+    if dt is None:
+        dt = compute_timestep_TV(dxy, dθ, G_inv_np)
+    print(dt)
     n = int(T / dt)
     k_s, radius_s = gaussian_derivative_kernel(σ_s, 0)
     k_o, radius_o = gaussian_derivative_kernel(σ_o, 0)

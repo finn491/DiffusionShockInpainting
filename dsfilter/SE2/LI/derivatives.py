@@ -614,9 +614,9 @@ def TV(
     convolve_with_kernel_θ_dir(storage, k_o, radius_o, grad_norm_u)
 
     for I in ti.grouped(normalised_grad_1):
-        normalised_grad_1[I] = G_inv[0] * A1_u[I] / (grad_norm_u[I] + 10**-5)
-        normalised_grad_2[I] = G_inv[1] * A2_u[I] / (grad_norm_u[I] + 10**-5)
-        normalised_grad_3[I] = G_inv[2] * A3_u[I] / (grad_norm_u[I] + 10**-5)
+        normalised_grad_1[I] = G_inv[0] * A1_u[I] / grad_norm_u[I]
+        normalised_grad_2[I] = G_inv[1] * A2_u[I] / grad_norm_u[I]
+        normalised_grad_3[I] = G_inv[2] * A3_u[I] / grad_norm_u[I]
 
     for I in ti.grouped(TV_u):
         θ = θs[I]
