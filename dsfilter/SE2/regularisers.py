@@ -36,7 +36,9 @@
 """
 
 import taichi as ti
-from dsfilter.SE2.utils import sanitize_reflected_index
+from dsfilter.SE2.utils import (
+    mirror_spatially_on_grid
+)
 
 # Scalar Field Regularisation
 ## Isotropic
@@ -174,7 +176,7 @@ def convolve_with_kernel_x_dir(
     for x, y, θ in u_convolved:
         s = 0.
         for i in range(2*radius+1):
-            index = sanitize_reflected_index(ti.Vector([x - radius + i, y, θ], dt=ti.i32), u)
+            index = mirror_spatially_on_grid(ti.Vector([x - radius + i, y, θ], dt=ti.i32), u)
             s += u[index] * k[2*radius-i]
         u_convolved[x, y, θ] = s
 
@@ -203,7 +205,7 @@ def convolve_with_kernel_y_dir(
     for x, y, θ in u_convolved:
         s = 0.
         for i in range(2*radius+1):
-            index = sanitize_reflected_index(ti.Vector([x, y - radius + i, θ], dt=ti.i32), u)
+            index = mirror_spatially_on_grid(ti.Vector([x, y - radius + i, θ], dt=ti.i32), u)
             s+= u[index] * k[2*radius-i]
         u_convolved[x, y, θ] = s
 
@@ -233,7 +235,7 @@ def convolve_with_kernel_θ_dir(
         s = 0.
         for i in range(2*radius+1):
             # This may in fact give the correct convolution...
-            index = sanitize_reflected_index(ti.Vector([x, y, θ - radius + i], dt=ti.i32), u)
+            index = mirror_spatially_on_grid(ti.Vector([x, y, θ - radius + i], dt=ti.i32), u)
             s+= u[index] * k[2*radius-i]
         u_convolved[x, y, θ] = s
 
@@ -317,7 +319,7 @@ def regularise_anisotropic(
                     # Actually doing a correlation, but since the kernel is
                     # symmetric, i.e. K(h^-1) = K(h), this is the same.
                     I_step = ti.Vector([ix - rs, iy - rs, iθ - ro], ti.i32)
-                    s += u[sanitize_reflected_index(I + I_step, u)] * diff
+                    s += u[mirror_spatially_on_grid(I + I_step, u)] * diff
         u_convolved[I] = s / norm
 
 
@@ -357,7 +359,7 @@ def convolve_matrix_3_by_3_with_kernel_x_dir(
         s21 = 0.
         s22 = 0.
         for i in range(2*radius+1):
-            index = sanitize_reflected_index(ti.Vector([x - radius + i, y, θ], dt=ti.i32), M)
+            index = mirror_spatially_on_grid(ti.Vector([x - radius + i, y, θ], dt=ti.i32), M)
             k_val = k[2*radius-i]
             s00 += M[index][0, 0] * k_val
             s01 += M[index][0, 1] * k_val
@@ -412,7 +414,7 @@ def convolve_matrix_3_by_3_with_kernel_y_dir(
         s21 = 0.
         s22 = 0.
         for i in range(2*radius+1):
-            index = sanitize_reflected_index(ti.Vector([x, y - radius + i, θ], dt=ti.i32), M)
+            index = mirror_spatially_on_grid(ti.Vector([x, y - radius + i, θ], dt=ti.i32), M)
             k_val = k[2*radius-i]
             s00 += M[index][0, 0] * k_val
             s01 += M[index][0, 1] * k_val
@@ -467,7 +469,7 @@ def convolve_matrix_3_by_3_with_kernel_θ_dir(
         s21 = 0.
         s22 = 0.
         for i in range(2*radius+1):
-            index = sanitize_reflected_index(ti.Vector([x, y, θ - radius + i], dt=ti.i32), M)
+            index = mirror_spatially_on_grid(ti.Vector([x, y, θ - radius + i], dt=ti.i32), M)
             k_val = k[2*radius-i]
             s00 += M[index][0, 0] * k_val
             s01 += M[index][0, 1] * k_val
