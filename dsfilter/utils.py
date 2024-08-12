@@ -215,18 +215,16 @@ def apply_boundary_conditions(
     Apply `boundaryvalues` at `boundarypoints` to `u`.
 
     Args:
-        `u`: ti.field(dtype=[float]) to which the boundary conditions should be 
-          applied.
+      Static:
         `boundarypoints`: ti.Vector.field(n=dim, dtype=[int], shape=N_points),
           where `N_points` is the number of boundary points and `dim` is the 
           dimension of `u`.
         `boundaryvalues`: ti.Vector.field(n=dim, dtype=[float], shape=N_points),
           where `N_points` is the number of boundary points and `dim` is the 
           dimension of `u`.
-
-    Returns:
-        ti.field equal to `u`, except at `boundarypoints`, where it equals
-          `boundaryvalues`.
+      Mutated:
+        `u`: ti.field(dtype=[float]) to which the boundary conditions should be 
+          applied.
     """
     for I in ti.grouped(boundarypoints):
         u[boundarypoints[I]] = boundaryvalues[I]
@@ -242,25 +240,38 @@ def image_rescale(image_array, new_max=1.):
     image_min = image_array.min()
     return new_max * (image_array - image_min) / (image_max - image_min)
 
-# TaiChi Stuff
+# Quality Measures
 
 @ti.kernel
-def sparse_to_dense(
-    sparse_thing: ti.template(),
-    dense_thing: ti.template()
-):
+def PSNR(
+    u: ti.template(),
+    ground_truth: ti.template(),
+    MAX: ti.f32
+) -> ti.f32:
     """
-    @taichi.func
+    @taichi.kernel
 
-    Convert a sparse TaiChi object on an SNode into a dense object.
+    Compute the Peak Signal-to-Noise Ratio (PSNR) of `u` with respect to
+    `ground_truth`.
 
     Args:
       Static:
-        `sparse_thing`: Sparse TaiChi object.
-      Mutated:
-        `dense_thing`: Preinitialised dense TaiChi object of correct size, which
-          is updated in place.
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) reconstruction of image.
+        `ground_truth`: ti.field(dtype=[float], shape=[Nx, Ny]), image that is
+          being reconstructed.
+        `MAX`: maximum possible value a pixel can take. Typically 1 or 255.
+
+    Returns:
+        PSNR in dB of `u` with respect to `ground_truth`.
     """
-    for I in ti.grouped(sparse_thing):
-        dense_thing[I] = sparse_thing[I]
-    sparse_thing.deactivate()
+    # Total squared error/L2 error
+    SE = 0
+    for I in ti.grouped(u):
+        SE += (u[I] - ground_truth[I])**2
+    # Mean squared error
+    shape = u.shape
+    N = shape[0] * shape[1]
+    MSE = SE / N
+    # PSNR is in dB, so we log_10; log_10(x) = ln(x) / ln(10).
+    ln_10 = ti.static(ti.math.log(10))
+    return 10 * ti.math.log((MAX**2) / MSE) / ln_10

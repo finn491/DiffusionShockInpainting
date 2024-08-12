@@ -27,6 +27,31 @@ def clean_mask_boundaries(u, mask):
         u_preprocessed[..., k] += mask[..., k] * u[..., k] + (1 - mask[..., k]) * np.median(u[..., k])
     return u_preprocessed
 
+@ti.kernel
+def project_down(
+    U: ti.template(),
+    u: ti.template()
+):
+    """
+    @taichi.kernel
+
+    Project orientation score `U` on SE(2) down to a function `u` on R^2 by
+    integrating over orientations.
+
+    Args:
+      Static:
+        `U`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) orientation score to be
+          projected down.
+      Mutated:
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny]) projection of orientation
+          score.
+    """
+    Nθ = U.shape[-1]
+    for I in ti.grouped(u):
+        u[I] = 0.
+        for i in range(Nθ):
+            u[I] += U[I, i]
+
 # Safe Indexing
 
 @ti.func
