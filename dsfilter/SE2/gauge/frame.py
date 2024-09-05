@@ -3,7 +3,11 @@
     =====
 
     Compute the gauge frames fitted to data on SE(2), using:
-      1. `compute_gauge_frame`: 
+      1. `compute_gauge_frame_and_orientation_confidence`: fit the gauge frame
+      and compute the orientation confidence, see [2].
+      2. `compute_deviation_from_horizontality`: compute the deviation from
+      horizontality given the main gauge vector.
+      3. `compute_curvature`: compute the curvature given the main gauge vector.
 
     References:
       [1]: R. Duits, B.M.N. Smets, A.J. Wemmenhove, J.W. Portegies, and
@@ -19,9 +23,11 @@
       ISBN:978-90-384-1456-4.
 """
 
-import taichi as ti
 import numpy as np
 import scipy as sp
+
+# Maybe do a TaiChi implementation eventually.
+# import taichi as ti
 # from dsfilter.SE2.utils import scalar_trilinear_interpolate
 # from dsfilter.SE2.regularisers import (
 #     convolve_with_kernel_x_dir,
@@ -120,12 +126,21 @@ def compute_orientation_confidence(H, B2, B3):
     )[..., 0, 0]
 
 def compute_curvature(B1):
+    """
+    Compute the curvature given principal gauge vector `B1` with respect to the
+    left invariant frame.
+    """
     c1 = B1[..., 0]
     c2 = B1[..., 1]
     c3 = B1[..., 2]
+    # 🤔 Is it strange that there is no ξ in this expression?
     return c3 * np.sign(c1) / np.sqrt(c1**2 + c2**2)
 
 def compute_deviation_from_horizontality(B1):
+    """
+    Compute the deviation from horizontality given principal gauge vector `B1`
+    with respect to the left invariant frame.
+    """
     c1 = B1[..., 0]
     c2 = B1[..., 1]
     return np.arctan2(c2, c1)
@@ -162,14 +177,14 @@ def compute_gauge_frame(H, ξ, ρ_s=1., ρ_o=0.5):
     H_T = np.moveaxis(H, -1, -2)
     # Metric defining the relation between the spatial dimensions and the
     # orientational directions.
-    M_inv = np.diag((1/ξ, 1/ξ, 1.))
+    M_inv = np.diag((1./ξ, 1./ξ, 1.))
     # Matrix equation formulation of minimisation problem.
     A = M_inv @ H_T @ M_inv @ M_inv @ H @ M_inv
     # Regularise spatially.
     A_reg = sp.ndimage.gaussian_filter(A, (ρ_s, ρ_s, ρ_o), axes=range(A.ndim-2), mode="wrap")
 
     # The eigenvector corresponding to the smallest eigenvalue of this matrix
-    # are closely related to the minimiser we are looking for: if v is that
+    # is closely related to the minimiser we are looking for: if v is that
     # eigenvector, then the minimiser c we are looking for is given by
     #   c = M_inv v.
     # Additionally, if v has unit (Euclidean) length, then c is properly
@@ -192,7 +207,8 @@ def compute_gauge_frame(H, ξ, ρ_s=1., ρ_o=0.5):
     ν = np.arctan2(c3, ξ * np.sqrt(c1**2 + c2**2))
     # We further impose that the frame is orthogonal with respect to
     #   G = diag(ξ^2, ξ^2, 1).
-    # We choose B_2 to be purely spatial.
+    # We choose B_2 to be purely spatial. Finally, we want the frame to be
+    # right-handed.
     B2 = np.zeros_like(B1)
     B2[..., 0] = -np.sin(χ) / ξ
     B2[..., 1] = np.cos(χ) / ξ

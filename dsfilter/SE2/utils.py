@@ -226,17 +226,17 @@ def vectorfield_LI_to_static(
     """
     @taichi.func
 
-    Change the coordinates of the vectorfield represented by `vectorfield_LI`
+    Change the components of the vectorfield represented by `vectorfield_LI`
     from the left invariant to the static frame.
 
     Args:
       Static:
         `vectorfield_LI`: ti.Vector.field(n=3, dtype=[float]) represented in LI
-          coordinates.
+          components.
         `θs`: angle coordinate at each grid point.
       Mutated:
         vectorfield_static`: ti.Vector.field(n=3, dtype=[float]) represented in
-          static coordinates.
+          static components.
     """
     for I in ti.grouped(vectorfield_LI):
         vectorfield_static[I] = vector_LI_to_static(vectorfield_LI[I], θs[I])
@@ -249,14 +249,14 @@ def vector_LI_to_static(
     """
     @taichi.func
 
-    Change the coordinates of the vector represented by `vector_LI` from the 
+    Change the components of the vector represented by `vector_LI` from the 
     left invariant to the static frame, given that the angle coordinate of the 
     point on the manifold corresponding to this vector is θ.
 
     Args:
       Static:
         `vector_LI`: ti.Vector(n=3, dtype=[float]) represented in LI
-          coordinates.
+          components.
         `θ`: angle coordinate of corresponding point on the manifold.
     """
     
@@ -279,20 +279,33 @@ def vectorfield_static_to_LI(
     """
     @taichi.func
 
-    Change the coordinates of the vectorfield represented by 
-    `vectorfield_static` from the static to the left invariant frame.
+    Change the components of the vectorfield represented by `vectorfield_static`
+    from the static to the left invariant frame.
 
     Args:
       Static:
         `vectorfield_static`: ti.Vector.field(n=3, dtype=[float]) represented in
-          static coordinates.
+          static components.
         `θs`: angle coordinate at each grid point.
       Mutated:
         vectorfield_LI`: ti.Vector.field(n=3, dtype=[float]) represented in
-          LI coordinates.
+          LI components.
     """
     for I in ti.grouped(vectorfield_static):
         vectorfield_static[I] = vector_static_to_LI(vectorfield_LI[I], θs[I])
+
+def vectorfield_static_to_LI_np(X_LI, θs):
+    """
+    Change the components of the vectorfield represented by `vectorfield_static`
+    from the static to the left invariant frame.
+    """
+    X_static = np.zeros_like(X_LI)
+    cos = np.cos(θs)
+    sin = np.sin(θs)
+    X_static[..., 0] = X_LI[..., 0] * cos - X_LI[..., 1] * sin
+    X_static[..., 1] = X_LI[..., 0] * sin + X_LI[..., 1] * cos
+    X_static[..., 2] = X_LI[..., 2]
+    return X_static
 
 @ti.func
 def vector_static_to_LI(
@@ -302,14 +315,14 @@ def vector_static_to_LI(
     """
     @taichi.func
 
-    Change the coordinates of the vector represented by `vector_static` from the 
+    Change the components of the vector represented by `vector_static` from the 
     left invariant to the static frame, given that the angle coordinate of the 
     point on the manifold corresponding to this vector is θ.
 
     Args:
       Static:
         `vector_static`: ti.Vector(n=3, dtype=[float]) represented in static
-        coordinates.
+        components.
         `θ`: angle coordinate of corresponding point on the manifold.
     """
 
