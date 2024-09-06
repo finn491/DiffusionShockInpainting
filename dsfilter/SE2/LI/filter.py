@@ -712,7 +712,7 @@ def TV_inpainting(u0_np, mask_np, G_inv_np, dxy, dθ, θs_np, σ_s, σ_o, T, dt=
         `θs_np`: np.ndarray orientation coordinate θ throughout the domain.
         `G_inv_np`: np.ndarray(shape=(3,), dtype=[float]) of constants of the
           inverse of the diagonal metric tensor with respect to left invariant
-          basis used to define the shock.
+          basis.
         `dxy`: size of pixels in the x- and y-directions.
         `dθ`: size of pixels in the θ-direction.
         `σ_s`: standard deviation of the internal regularisation in the spatial

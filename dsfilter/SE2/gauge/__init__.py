@@ -14,7 +14,7 @@
 """
 
 # Access entire backend
-# import dsfilter.SE2.gauge.filter
-# import dsfilter.SE2.gauge.derivatives
-# import dsfilter.SE2.gauge.switches
+import dsfilter.SE2.gauge.filter
+import dsfilter.SE2.gauge.derivatives
+import dsfilter.SE2.gauge.switches
 import dsfilter.SE2.gauge.frame

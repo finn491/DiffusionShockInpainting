@@ -17,3 +17,4 @@
 import dsfilter.SE2.regularisers
 import dsfilter.SE2.utils
 import dsfilter.SE2.LI
+import dsfilter.SE2.gauge

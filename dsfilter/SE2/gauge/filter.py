@@ -288,12 +288,12 @@ def TV_inpainting(u0_np, mask_np, G_inv_np, ξ, dxy, dθ, gauge_frame_static, σ
         `u0_np`: np.ndarray initial condition, with shape [Nx, Ny, Nθ].
         `mask_np`: np.ndarray inpainting mask, with shape [Nx, Ny, Nθ], taking
           values 0 and 1. Wherever the value is 1, no inpainting happens.
-        `θs_np`: np.ndarray orientation coordinate θ throughout the domain.
         `G_inv_np`: np.ndarray(shape=(3,), dtype=[float]) of constants of the
-          inverse of the diagonal metric tensor with respect to left invariant
-          basis used to define the shock.
+          inverse of the diagonal metric tensor with respect to gauge frame.
         `dxy`: size of pixels in the x- and y-directions.
         `dθ`: size of pixels in the θ-direction.
+        `gauge_frame_static`: Tuple[np.ndarray(shape=(Nx, Ny, Nθ, 3)),] gauge
+        vector fields B1, B2, and B3 with respect to the static frame.
         `σ_s`: standard deviation of the internal regularisation in the spatial
           direction of the perpendicular laplacian, used for determining whether
           to perform dilation or erosion.
