@@ -230,22 +230,24 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
         slice = rotate_right(slice, rotation_amount)
         cake[i] = slice * window
     return cake
-   
-def wavelet_transform(f, kernels, shift=-1):
+
+def wavelet_transform(f, kernels):
     """Return the wavelet transform of image `f` under the `kernels`."""
     shape = f.shape
-    ost = np.zeros((kernels.shape[0], *shape), dtype=np.complex_)
-    if kernels.shape[1:] == shape: # Compute by Fourier Transform.
-        f_hat = np.fft.fftn(f)
-        rotation_amount = np.ceil(0.1 + np.array(shape) / 2).astype(int)
-        for i, ψ_θ in enumerate(kernels):
-            ψ_θ_hat = np.fft.fftn(np.flip(ψ_θ, axis=(0, 1)))
-            U_θ = np.fft.ifftn(ψ_θ_hat * f_hat)
-            U_θ = rotate_right(U_θ, rotation_amount)
-            ost[i] = U_θ
-    else: # Compute by direct correlation.
-        if kernels.shape[1] % 2 == 0:
-            kernels = np.roll(kernels, shift=shift, axis=(1, 2)) # Ew.
-        for i, ψ_θ in enumerate(kernels):
-            ost[i] = sp.signal.convolve(f, ψ_θ, mode="same", method="fft")
+    kernels_shape = kernels.shape
+    ost = np.zeros((kernels_shape[0], *shape), dtype=np.complex_)
+    if kernels_shape[1:] != shape: # Pad kernels so we can convolve by multiplication in Fourier domain.
+        pad_1_l = int(np.floor((shape[0] - kernels_shape[1]) / 2))
+        pad_1_r = int(np.ceil((shape[0] - kernels_shape[1]) / 2))
+        pad_2_l = int(np.floor((shape[1] - kernels_shape[2]) / 2))
+        pad_2_r = int(np.ceil((shape[1] - kernels_shape[2]) / 2))
+        kernels = np.pad(kernels, pad_width=((0, 0), (pad_1_l, pad_1_r), (pad_2_l, pad_2_r)), mode="edge")
+
+    f_hat = np.fft.fftn(f)
+    rotation_amount = np.ceil(0.1 + np.array(shape) / 2).astype(int)
+    for i, ψ_θ in enumerate(kernels):
+        ψ_θ_hat = np.fft.fftn(np.flip(ψ_θ, axis=(0, 1)))
+        U_θ = np.fft.ifftn(ψ_θ_hat * f_hat)
+        U_θ = rotate_right(U_θ, rotation_amount)
+        ost[i] = U_θ
     return ost
