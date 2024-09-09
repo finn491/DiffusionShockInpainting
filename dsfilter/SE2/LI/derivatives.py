@@ -393,6 +393,43 @@ def gradient_perp_s(
         )
 
 @ti.func
+def gradient_s(
+    u: ti.template(),
+    dxy: ti.f32,
+    θs: ti.template(),
+    gradient_u: ti.template()
+):
+    """
+    @taichi.func
+
+    Compute an approximation of the spatial gradient of `u` using
+    central differences.
+
+    Args:
+      Static:
+        `u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) which we want to
+          differentiate.
+        `dxy`: step size in x and y direction, taking values greater than 0.
+        `θs`: angle coordinate at each grid point.
+      Mutated:
+        `gradient_perp_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) spatial
+          gradient of u, which is updated in place.
+    """
+    for I in ti.grouped(gradient_u):
+        θ = θs[I]
+        cos = ti.math.cos(θ)
+        sin = ti.math.sin(θ)
+        I_A1 = ti.Vector([cos, sin, 0.0], dt=ti.f32) / 2
+        I_A2 = ti.Vector([-sin, cos, 0.0], dt=ti.f32) / 2
+        # ||grad u|| = sqrt(G(grad u, grad u)) = sqrt(g^ij A_i u A_j u) = sqrt(g^11 (A_1 u)^2 + g^22 (A_2 u)^2)
+        gradient_u[I] = ti.math.sqrt(((
+                scalar_trilinear_interpolate(u, I + I_A1) - scalar_trilinear_interpolate(u, I - I_A1)
+            ) / dxy)**2 + ((
+                scalar_trilinear_interpolate(u, I + I_A2) - scalar_trilinear_interpolate(u, I - I_A2)
+            ) / dxy)**2
+        )
+
+@ti.func
 def gradient_perp_o(
     u: ti.template(),
     dθ: ti.f32,

@@ -156,6 +156,127 @@ def DS_filter(u0_np, mask_np, θs_np, ξ, T, G_D_inv_np, G_S_inv_np, σ_1, σ_2,
     # ti.profiler.clear_kernel_profiler_info()
     return u.to_numpy(), switch_DS.to_numpy(), switch_morph.to_numpy()
 
+# def DS_filter_spatial(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_s, σ_o, ρ_s, ρ_o, ν_s, ν_o, λ, ε=0., dxy=1.):
+#     """
+#     Perform Diffusion-Shock inpainting in SE(2), using an adaptation of the 
+#     R^2 Diffusion-Shock inpainting algorithm described by Schaefer and
+#     Weickert.[1][2]
+
+#     Args:
+#         `u0_np`: np.ndarray initial condition, with shape [Nx, Ny, Nθ].
+#         `mask_np`: np.ndarray inpainting mask, with shape [Nx, Ny, Nθ], taking
+#           values 0 and 1. Wherever the value is 1, no inpainting happens.
+#         `θs_np`: np.ndarray orientation coordinate θ throughout the domain.
+#         `T`: time that image is evolved under the DS PDE.
+#         `G_D_inv_np`: np.ndarray(shape=(2,), dtype=[float]) spatial constants of
+#           the inverse of the diagonal metric tensor with respect to left
+#           invariant basis used to define the diffusion.
+#         `G_S_inv_np`: np.ndarray(shape=(2,), dtype=[float]) spatial constants of
+#           the inverse of the diagonal metric tensor with respect to left
+#           invariantbasis used to define the shock.
+#         `σ_s`: standard deviation in the spatial directions of the internal
+#           regularisation of the morphological switch, taking values greater than
+#           0.
+#         `σ_o`: standard deviation in the orientational directions of the
+#           internal regularisation of the morphological switch, taking values
+#           greater than 0.
+#         `ρ_s`: standard deviation in the spatial directions of the external
+#           regularisation of the morphological switch, taking values greater than
+#           0.
+#         `ρ_o`: standard deviation in the orientational directions of the
+#           external regularisation of the morphological switch, taking values
+#           greater than 0.
+#         `ν_s`: standard deviation in the spatial directions of the internal
+#           regularisation of the morphological switch, taking values greater than
+#           0.
+#         `ν_o`: standard deviation in the orientational directions of the
+#           internal regularisation of the diffusion-shock switch, taking values
+#           greater than 0.
+#         `λ`: contrast parameter used to determine whether to perform diffusion
+#           or shock based on the degree of local orientation.
+        
+#       Optional:
+#         `ε`: regularisation parameter for the signum function used to switch
+#           between dilation and erosion.
+#         `dxy`: size of pixels in the x- and y-directions. Defaults to 1.
+
+#     Returns:
+#         np.ndarray solution to the DS PDE with initial condition `u0_np` at
+#         time `T`.
+#         TEMP: np.ndarray switch between diffusion and shock, and np.ndarray
+#         switch between dilation and erosion.
+
+#     References:
+#         [1]: K. Schaefer and J. Weickert.
+#           "Diffusion-Shock Inpainting". In: Scale Space and Variational Methods
+#           in Computer Vision 14009 (2023), pp. 588--600.
+#           DOI:10.1137/15M1018460.
+#         [2]: K. Schaefer and J. Weickert.
+#           "Regularised Diffusion-Shock Inpainting". In: Journal of Mathematical
+#           Imaging and Vision (2024).
+#           DOI:10.1007/s10851-024-01175-0.
+#     """
+#     # Set hyperparameters
+#     shape = u0_np.shape
+#     _, _, Nθ = shape
+#     dθ = 2 * np.pi / Nθ
+#     dt = compute_timestep(dxy, dθ, G_D_inv_np, G_S_inv_np)
+#     n = int(T / dt)
+
+#     k_s_DS, radius_s_DS = gaussian_derivative_kernel(ν_s, 0, dxy=dxy)
+#     k_o_DS, radius_o_DS = gaussian_derivative_kernel(ν_o, 0, dxy=dθ)
+#     k_s_morph_int, radius_s_morph_int = gaussian_derivative_kernel(σ_s, 0, dxy=dxy)
+#     k_o_morph_int, radius_o_morph_int = gaussian_derivative_kernel(σ_o, 0, dxy=dθ)
+#     k_s_morph_ext, radius_s_morph_ext = gaussian_derivative_kernel(ρ_s, 0, dxy=dxy)
+#     k_o_morph_ext, radius_o_morph_ext = gaussian_derivative_kernel(ρ_o, 0, dxy=dθ)
+
+#     # Initialise TaiChi objects
+#     θs = ti.field(ti.f32, shape=shape)
+#     θs.from_numpy(θs_np)
+#     G_D_inv = ti.Vector(G_D_inv_np[:-1], dt=ti.f32)
+#     G_S_inv = ti.Vector(G_S_inv_np[:-1], dt=ti.f32)
+#     mask = ti.field(dtype=ti.f32, shape=shape)
+#     mask.from_numpy(mask_np)
+#     du_dt = ti.field(dtype=ti.f32, shape=shape)
+
+#     ## Padded versions for derivatives
+#     u = ti.field(dtype=ti.f32, shape=shape)
+#     u.from_numpy(u0_np)
+#     ### Laplacian
+#     laplacian_u = ti.field(dtype=ti.f32, shape=shape)
+#     ### Morphological
+#     dilation_u = ti.field(dtype=ti.f32, shape=shape)
+#     erosion_u = ti.field(dtype=ti.f32, shape=shape)
+
+#     ## Fields for switches
+#     u_switch = ti.field(dtype=ti.f32, shape=shape)
+#     fill_u_switch(u, u_switch)
+#     storage = ti.field(dtype=ti.f32, shape=shape)
+#     ### DS switch
+#     gradient_perp_u = ti.field(dtype=ti.f32, shape=shape)
+#     switch_DS = ti.field(dtype=ti.f32, shape=shape)
+#     ### Morphological switch
+#     laplace_perp_u = ti.field(dtype=ti.f32, shape=shape)
+#     switch_morph = ti.field(dtype=ti.f32, shape=shape)
+
+#     for _ in tqdm(range(n)):
+#         # Compute switches
+#         DS_switch_s(u_switch, dxy, θs, k_s_DS, radius_s_DS, k_o_DS, radius_o_DS, λ, gradient_perp_u, switch_DS, storage)
+#         morphological_switch_s(u_switch, dxy, θs, ε, k_s_morph_int, radius_s_morph_int, k_o_morph_int,
+#                                radius_o_morph_int, k_s_morph_ext, radius_s_morph_ext, k_o_morph_ext, radius_o_morph_ext,
+#                                laplace_perp_u, switch_morph, storage)
+#         # Compute derivatives
+#         laplacian_s(u, G_D_inv, dxy, θs, laplacian_u)
+#         morphological_s(u, G_S_inv, dxy, θs, dilation_u, erosion_u)
+#         # Step
+#         step_DS_filter(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
+#         # Update fields for switches
+#         fill_u_switch(u, u_switch)
+#     # ti.sync()
+#     # ti.profiler.print_kernel_profiler_info("trace")
+#     # ti.profiler.clear_kernel_profiler_info()
+#     return u.to_numpy(), switch_DS.to_numpy(), switch_morph.to_numpy()
+
 def DS_filter_spatial(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_s, σ_o, ρ_s, ρ_o, ν_s, ν_o, λ, ε=0., dxy=1.):
     """
     Perform Diffusion-Shock inpainting in SE(2), using an adaptation of the 
@@ -253,7 +374,7 @@ def DS_filter_spatial(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_s, �
     fill_u_switch(u, u_switch)
     storage = ti.field(dtype=ti.f32, shape=shape)
     ### DS switch
-    gradient_perp_u = ti.field(dtype=ti.f32, shape=shape)
+    gradient_u = ti.field(dtype=ti.f32, shape=shape)
     switch_DS = ti.field(dtype=ti.f32, shape=shape)
     ### Morphological switch
     laplace_perp_u = ti.field(dtype=ti.f32, shape=shape)
@@ -261,7 +382,7 @@ def DS_filter_spatial(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_s, �
 
     for _ in tqdm(range(n)):
         # Compute switches
-        DS_switch_s(u_switch, dxy, θs, k_s_DS, radius_s_DS, k_o_DS, radius_o_DS, λ, gradient_perp_u, switch_DS, storage)
+        DS_switch_s(u_switch, dxy, θs, k_s_DS, radius_s_DS, k_o_DS, radius_o_DS, λ, gradient_u, switch_DS, storage)
         morphological_switch_s(u_switch, dxy, θs, ε, k_s_morph_int, radius_s_morph_int, k_o_morph_int,
                                radius_o_morph_int, k_s_morph_ext, radius_s_morph_ext, k_o_morph_ext, radius_o_morph_ext,
                                laplace_perp_u, switch_morph, storage)
