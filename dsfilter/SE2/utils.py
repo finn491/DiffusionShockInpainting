@@ -23,8 +23,9 @@ def clean_mask_boundaries(u, mask):
     """
     dim_K = u.shape[-1]
     u_preprocessed = np.zeros_like(u)
+    median = np.median(u)
     for k in range(dim_K):
-        u_preprocessed[..., k] += mask[..., k] * u[..., k] + (1 - mask[..., k]) * np.median(u[..., k])
+        u_preprocessed[..., k] += mask[..., k] * u[..., k] + (1 - mask[..., k]) * median
     return u_preprocessed
 
 @ti.kernel

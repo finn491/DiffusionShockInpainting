@@ -33,6 +33,7 @@ from dsfilter.SE2.LI.derivatives import (
     laplace_perp,
     laplace_perp_s,
     laplace_perp_o,
+    gradient,
     gradient_perp,
     gradient_perp_s,
     gradient_s,
@@ -59,7 +60,7 @@ def DS_switch(
     k_o: ti.template(),
     radius_o: ti.template(),
     λ: ti.f32,
-    gradient_perp_u: ti.template(),
+    gradient_u: ti.template(),
     switch: ti.template(),
     storage: ti.template()
 ):
@@ -112,9 +113,9 @@ def DS_switch(
     convolve_with_kernel_y_dir(switch, k_s, radius_s, storage)
     convolve_with_kernel_θ_dir(storage, k_o, radius_o, switch)
     # Then compute perpendicular gradient, which is a measure for lineness.
-    gradient_perp(switch, dxy, dθ, θs, ξ, gradient_perp_u)
+    gradient(switch, dxy, dθ, θs, ξ, gradient_u)
     for I in ti.grouped(switch):
-        switch[I] = g_scalar(gradient_perp_u[I]**2, λ)
+        switch[I] = g_scalar(gradient_u[I]**2, λ)
     # # Finally regularise externally with Gaussian convolution.
     # convolve_with_kernel_x_dir(switch, k_s, radius_s, gradient_perp_u)
     # convolve_with_kernel_y_dir(gradient_perp_u, k_s, radius_s, storage)
