@@ -385,9 +385,9 @@ def gradient(
                 scalar_trilinear_interpolate(u, I + I_A1) - scalar_trilinear_interpolate(u, I - I_A1)
             ) / dxy)**2 + ((
                 scalar_trilinear_interpolate(u, I + I_A2) - scalar_trilinear_interpolate(u, I - I_A2)
-            ) / dxy)**2 + ξ**2 * ((
-                scalar_trilinear_interpolate(u, I + I_A3) - scalar_trilinear_interpolate(u, I - I_A3)
-            ) / dθ)**2
+            ) / dxy)**2 # + ξ**2 * ((
+            #     scalar_trilinear_interpolate(u, I + I_A3) - scalar_trilinear_interpolate(u, I - I_A3)
+            # ) / dθ)**2
         )
 
 @ti.func

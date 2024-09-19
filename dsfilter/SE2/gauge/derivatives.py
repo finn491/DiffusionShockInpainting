@@ -26,6 +26,7 @@ def laplacian(
     G_inv: ti.types.vector(3, ti.f32),
     dxy: ti.f32,
     dθ: ti.f32,
+    ξ: ti.f32,
     B1: ti.template(),
     B2: ti.template(),
     B3: ti.template(),
@@ -51,21 +52,41 @@ def laplacian(
         `laplacian_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) laplacian of
           u, which is updated in place.
     """
-    h = ti.math.min(dxy, dθ)
+    h = ξ * dxy
     for I in ti.grouped(laplacian_u):
-        I_B1 = ti.Vector([B1[I][0] / dxy, B1[I][1] / dxy, B1[I][2] / dθ], dt=ti.f32) * h
-        I_B2 = ti.Vector([B2[I][0] / dxy, B2[I][1] / dxy, B2[I][2] / dθ], dt=ti.f32) * h
-        I_B3 = ti.Vector([B3[I][0] / dxy, B3[I][1] / dxy, B3[I][2] / dθ], dt=ti.f32) * h
+        # Split gauge vectors into spatial and orientational part, so that we 
+        # can take steps that are roughly 1 pixel in size.
+        I_B1_s = ti.Vector([B1[I][0] * ξ, B1[I][1] * ξ, 0.], dt=ti.f32) / 2
+        I_B1_o = ti.Vector([0., 0., B1[I][2]]) / 2
+        I_B2_s = ti.Vector([B2[I][0] * ξ, B2[I][1] * ξ, 0.], dt=ti.f32) / 2
+        I_B2_o = ti.Vector([0., 0., B2[I][2]]) / 2
+        I_B3_s = ti.Vector([B3[I][0] * ξ, B3[I][1] * ξ, 0.], dt=ti.f32) / 2
+        I_B3_o = ti.Vector([0., 0., B3[I][2]]) / 2
 
-        B11 = (scalar_trilinear_interpolate(u, I + I_B1) -
-               2 * u[I] +
-               scalar_trilinear_interpolate(u, I - I_B1)) / h**2
-        B22 = (scalar_trilinear_interpolate(u, I + I_B2) -
-               2 * u[I] +
-               scalar_trilinear_interpolate(u, I - I_B2)) / h**2
-        B33 = (scalar_trilinear_interpolate(u, I + I_B3) -
-               2 * u[I] +
-               scalar_trilinear_interpolate(u, I - I_B3)) / h**2
+        B11 = (
+            (scalar_trilinear_interpolate(u, I + I_B1_s) -
+             2 * u[I] +
+             scalar_trilinear_interpolate(u, I - I_B1_s)) / h**2 + 
+            (scalar_trilinear_interpolate(u, I + I_B1_o) -
+             2 * u[I] +
+             scalar_trilinear_interpolate(u, I - I_B1_o)) / dθ**2
+        )
+        B22 = (
+            (scalar_trilinear_interpolate(u, I + I_B2_s) -
+             2 * u[I] +
+             scalar_trilinear_interpolate(u, I - I_B2_s)) / h**2 + 
+            (scalar_trilinear_interpolate(u, I + I_B2_o) -
+             2 * u[I] +
+             scalar_trilinear_interpolate(u, I - I_B2_o)) / dθ**2
+        )
+        B33 = (
+            (scalar_trilinear_interpolate(u, I + I_B3_s) -
+             2 * u[I] +
+             scalar_trilinear_interpolate(u, I - I_B3_s)) / h**2 + 
+            (scalar_trilinear_interpolate(u, I + I_B3_o) -
+             2 * u[I] +
+             scalar_trilinear_interpolate(u, I - I_B3_o)) / dθ**2
+        )
         # Δu = div(grad(u)) = sqrt(det(g)) B_i (sqrt(det(g)) g^ij B_j u) = g^ij B_i B_j u = g^ii B_i B_i u
         laplacian_u[I] = G_inv[0] * B11 + G_inv[1] * B22 + G_inv[2] * B33
 
@@ -75,6 +96,7 @@ def morphological(
     G_inv: ti.types.vector(3, ti.f32),
     dxy: ti.f32,
     dθ: ti.f32,
+    ξ: ti.f32,
     B1: ti.template(),
     B2: ti.template(),
     B3: ti.template(),
@@ -103,18 +125,41 @@ def morphological(
         `erosion_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) -||grad `u`||,
           which is updated in place.
     """
-    h = ti.math.min(dxy, dθ)
+    h = ξ * dxy
     for I in ti.grouped(dilation_u):
-        I_B1 = ti.Vector([B1[I][0] / dxy, B1[I][1] / dxy, B1[I][2] / dθ], dt=ti.f32) * h
-        I_B2 = ti.Vector([B2[I][0] / dxy, B2[I][1] / dxy, B2[I][2] / dθ], dt=ti.f32) * h
-        I_B3 = ti.Vector([B3[I][0] / dxy, B3[I][1] / dxy, B3[I][2] / dθ], dt=ti.f32) * h
+        # Split gauge vectors into spatial and orientational part, so that we 
+        # can take steps that are roughly 1 pixel in size.
+        I_B1_s = ti.Vector([B1[I][0] * ξ, B1[I][1] * ξ, 0.], dt=ti.f32) / 2
+        I_B1_o = ti.Vector([0., 0., B1[I][2]]) / 2
+        I_B2_s = ti.Vector([B2[I][0] * ξ, B2[I][1] * ξ, 0.], dt=ti.f32) / 2
+        I_B2_o = ti.Vector([0., 0., B2[I][2]]) / 2
+        I_B3_s = ti.Vector([B3[I][0] * ξ, B3[I][1] * ξ, 0.], dt=ti.f32) / 2
+        I_B3_o = ti.Vector([0., 0., B3[I][2]]) / 2
 
-        B1_forward = (scalar_trilinear_interpolate(u, I + I_B1) - u[I]) / h
-        B2_forward = (scalar_trilinear_interpolate(u, I + I_B2) - u[I]) / h
-        B3_forward = (scalar_trilinear_interpolate(u, I + I_B3) - u[I]) / h
-        B1_backward = (u[I] - scalar_trilinear_interpolate(u, I - I_B1)) / h
-        B2_backward = (u[I] - scalar_trilinear_interpolate(u, I - I_B2)) / h
-        B3_backward = (u[I] - scalar_trilinear_interpolate(u, I - I_B3)) / h
+        B1_forward = (
+            (scalar_trilinear_interpolate(u, I + I_B1_s) - u[I]) / h +
+            (scalar_trilinear_interpolate(u, I + I_B1_o) - u[I]) / dθ
+        )
+        B2_forward = (
+            (scalar_trilinear_interpolate(u, I + I_B2_s) - u[I]) / h +
+            (scalar_trilinear_interpolate(u, I + I_B2_o) - u[I]) / dθ
+        )
+        B3_forward = (
+            (scalar_trilinear_interpolate(u, I + I_B3_s) - u[I]) / h +
+            (scalar_trilinear_interpolate(u, I + I_B3_o) - u[I]) / dθ
+        )
+        B1_backward = (
+            (u[I] - scalar_trilinear_interpolate(u, I - I_B1_s)) / h +
+            (u[I] - scalar_trilinear_interpolate(u, I - I_B1_o)) / dθ
+        )
+        B2_backward = (
+            (u[I] - scalar_trilinear_interpolate(u, I - I_B2_s)) / h +
+            (u[I] - scalar_trilinear_interpolate(u, I - I_B2_o)) / dθ
+        )
+        B3_backward = (
+            (u[I] - scalar_trilinear_interpolate(u, I - I_B3_s)) / h +
+            (u[I] - scalar_trilinear_interpolate(u, I - I_B3_o)) / dθ
+        )
 
         # ||grad u|| = sqrt(G(grad u, grad u)) = sqrt(g^ij B_i u B_j u) = sqrt(g^ii (B_i u)^2)
         # Dilation
@@ -135,6 +180,7 @@ def gradient_perp(
     u: ti.template(),
     dxy: ti.f32,
     dθ: ti.f32,
+    ξ: ti.f32,
     B2: ti.template(),
     B3: ti.template(),
     gradient_perp_u: ti.template()
@@ -160,16 +206,24 @@ def gradient_perp(
         `gradient_perp_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ])
           perpendicular gradient of u, which is updated in place.
     """
-    h = ti.math.min(dxy, dθ)
+    h = ξ * dxy
     for I in ti.grouped(gradient_perp_u):
-        I_B2 = ti.Vector([B2[I][0] / dxy, B2[I][1] / dxy, B2[I][2] / dθ], dt=ti.f32) * h
-        I_B3 = ti.Vector([B3[I][0] / dxy, B3[I][1] / dxy, B3[I][2] / dθ], dt=ti.f32) * h
+        # Split gauge vectors into spatial and orientational part, so that we 
+        # can take steps that are roughly 1 pixel in size.
+        I_B2_s = ti.Vector([B2[I][0] * ξ, B2[I][1] * ξ, 0.], dt=ti.f32) / 2
+        I_B2_o = ti.Vector([0., 0., B2[I][2]]) / 2
+        I_B3_s = ti.Vector([B3[I][0] * ξ, B3[I][1] * ξ, 0.], dt=ti.f32) / 2
+        I_B3_o = ti.Vector([0., 0., B3[I][2]]) / 2
         # ||grad_perp u|| = sqrt(G(grad_perp u, grad_perp u)) = sqrt(g^ij B_i u B_j u) = sqrt(g^22 (B_2 u)^2 + g^33 (B_3 u)^2)
         gradient_perp_u[I] = ti.math.sqrt(((
-                scalar_trilinear_interpolate(u, I + I_B2) - scalar_trilinear_interpolate(u, I - I_B2)
-            ) / h)**2 + ((
-                scalar_trilinear_interpolate(u, I + I_B3) - scalar_trilinear_interpolate(u, I - I_B3)
-            ) / h)**2
+                scalar_trilinear_interpolate(u, I + I_B2_s) - scalar_trilinear_interpolate(u, I - I_B2_s)
+            ) / h + (
+                scalar_trilinear_interpolate(u, I + I_B2_o) - scalar_trilinear_interpolate(u, I - I_B2_o)
+            ) / dθ)**2 + ((
+                scalar_trilinear_interpolate(u, I + I_B3_s) - scalar_trilinear_interpolate(u, I - I_B3_s)
+            ) / h + (
+                scalar_trilinear_interpolate(u, I + I_B3_o) - scalar_trilinear_interpolate(u, I - I_B3_o)
+            ) / dθ)**2
         )
 
 @ti.func
@@ -177,6 +231,7 @@ def laplace_perp(
     u: ti.template(),
     dxy: ti.f32,
     dθ: ti.f32,
+    ξ: ti.f32,
     B2: ti.template(),
     B3: ti.template(),
     laplace_perp_u: ti.template()
@@ -202,16 +257,22 @@ def laplace_perp(
         `laplace_perp_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ])
           perpendicular laplacian of u, which is updated in place.
     """
-    h = ti.math.min(dxy, dθ)
+    h = ξ * dxy
     for I in ti.grouped(laplace_perp_u):
-        I_B2 = ti.Vector([B2[I][0] / dxy, B2[I][1] / dxy, B2[I][2] / dθ], dt=ti.f32) * h
-        I_B3 = ti.Vector([B3[I][0] / dxy, B3[I][1] / dxy, B3[I][2] / dθ], dt=ti.f32) * h
+        I_B2_s = ti.Vector([B2[I][0] * ξ, B2[I][1] * ξ, 0.], dt=ti.f32) / 2
+        I_B2_o = ti.Vector([0., 0., B2[I][2]]) / 2
+        I_B3_s = ti.Vector([B3[I][0] * ξ, B3[I][1] * ξ, 0.], dt=ti.f32) / 2
+        I_B3_o = ti.Vector([0., 0., B3[I][2]]) / 2
         # Δ_perp u = div_perp(grad_perp(u)) = sqrt(det(g)) B_i (sqrt(det(g)) g^ij B_j u) = g^ij B_i B_j u = B_2 B_2 u + B_3 B_3 u
         laplace_perp_u[I] = ((
-                scalar_trilinear_interpolate(u, I + I_B2) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_B2)
+                scalar_trilinear_interpolate(u, I + I_B2_s) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_B2_s)
             ) / h**2 + (
-                scalar_trilinear_interpolate(u, I + I_B3) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_B3)
-            ) / h**2
+                scalar_trilinear_interpolate(u, I + I_B2_o) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_B2_o)
+            ) / dθ**2 + (
+                scalar_trilinear_interpolate(u, I + I_B3_s) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_B3_s)
+            ) / h**2 + (
+                scalar_trilinear_interpolate(u, I + I_B3_o) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_B3_o)
+            ) / dθ**2
         )
 
 @ti.kernel

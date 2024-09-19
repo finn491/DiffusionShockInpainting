@@ -40,8 +40,7 @@ from dsfilter.SE2.gauge.frame import compute_gauge_frame_and_orientation_confide
 from dsfilter.SE2.regularisers import gaussian_derivative_kernel
 from dsfilter.SE2.utils import vectorfield_static_to_LI_np
 
-def DS_filter(u0_np, mask_np, θs_np, ξ, T, G_D_inv_np, G_S_inv_np, σ_1, σ_2, σ_3, ρ_1, ρ_2, ρ_3, ν_1, ν_2, ν_3, λ, ε=0.,
-              dxy=1.):
+def DS_filter(u0_np, mask_np, θs_np, ξ, gauge_frame_static, T, G_D_inv_np, G_S_inv_np, σ, ρ, ν, λ, ε=0., dxy=1.):
     """
     Perform Diffusion-Shock inpainting in SE(2), using an adaptation of the 
     R^2 Diffusion-Shock inpainting algorithm described by Schaefer and
@@ -96,12 +95,12 @@ def DS_filter(u0_np, mask_np, θs_np, ξ, T, G_D_inv_np, G_S_inv_np, σ_1, σ_2,
     dt = compute_timestep(dxy, dθ, G_D_inv_np, G_S_inv_np)
     n = int(T / dt)
 
-    k_s_DS, radius_s_DS = gaussian_derivative_kernel(ν_1, 0, dxy=dxy)
-    k_o_DS, radius_o_DS = gaussian_derivative_kernel(ν_3, 0, dxy=dθ)
-    k_s_morph_int, radius_s_morph_int = gaussian_derivative_kernel(σ_1, 0, dxy=dxy)
-    k_o_morph_int, radius_o_morph_int = gaussian_derivative_kernel(σ_3, 0, dxy=dθ)
-    k_s_morph_ext, radius_s_morph_ext = gaussian_derivative_kernel(ρ_1, 0, dxy=dxy)
-    k_o_morph_ext, radius_o_morph_ext = gaussian_derivative_kernel(ρ_3, 0, dxy=dθ)
+    k_s_DS, radius_s_DS = gaussian_derivative_kernel(ν, 0, dxy=dxy)
+    k_o_DS, radius_o_DS = gaussian_derivative_kernel(ν * ξ, 0, dxy=dθ)
+    k_s_morph_int, radius_s_morph_int = gaussian_derivative_kernel(σ, 0, dxy=dxy)
+    k_o_morph_int, radius_o_morph_int = gaussian_derivative_kernel(σ * ξ, 0, dxy=dθ)
+    k_s_morph_ext, radius_s_morph_ext = gaussian_derivative_kernel(ρ, 0, dxy=dxy)
+    k_o_morph_ext, radius_o_morph_ext = gaussian_derivative_kernel(ρ * ξ, 0, dxy=dθ)
 
     # Initialise TaiChi objects
     θs = ti.field(ti.f32, shape=shape)
@@ -132,27 +131,24 @@ def DS_filter(u0_np, mask_np, θs_np, ξ, T, G_D_inv_np, G_S_inv_np, σ_1, σ_2,
     laplace_perp_u = ti.field(dtype=ti.f32, shape=shape)
     switch_morph = ti.field(dtype=ti.f32, shape=shape)
 
-    B1_LI, B2_LI, B3_LI, _ = compute_gauge_frame_and_orientation_confidence(u0_np, dxy, dθ, θs_np, ξ)
-    B1_static = vectorfield_static_to_LI_np(B1_LI, θs_np)
-    B2_static = vectorfield_static_to_LI_np(B2_LI, θs_np)
-    B3_static = vectorfield_static_to_LI_np(B3_LI, θs_np)
+    B1_np, B2_np, B3_np = gauge_frame_static
     B1 = ti.Vector.field(3, dtype=ti.f32, shape=shape)
-    B1.from_numpy(B1_static)
+    B1.from_numpy(B1_np)
     B2 = ti.Vector.field(3, dtype=ti.f32, shape=shape)
-    B2.from_numpy(B2_static)
+    B2.from_numpy(B2_np)
     B3 = ti.Vector.field(3, dtype=ti.f32, shape=shape)
-    B3.from_numpy(B3_static)
+    B3.from_numpy(B3_np)
 
     for _ in tqdm(range(n)):
         # Compute switches
-        DS_switch(u_switch, dxy, dθ, ξ, θs, # ν_1, ν_2, ν_3,
-                  k_s_DS, radius_s_DS, k_o_DS, radius_o_DS, λ, gradient_perp_u, switch_DS, storage)
-        morphological_switch(u_switch, dxy, dθ, ξ, θs, ε, # σ_1, σ_2, σ_3, ρ_1, ρ_2, ρ_3,
-                             k_s_morph_int, radius_s_morph_int, k_o_morph_int, radius_o_morph_int, k_s_morph_ext,
-                             radius_s_morph_ext, k_o_morph_ext, radius_o_morph_ext, laplace_perp_u, switch_morph, storage)
+        DS_switch(u_switch, dxy, dθ, ξ, k_s_DS, radius_s_DS, k_o_DS, radius_o_DS, λ, B2, B3, gradient_perp_u, switch_DS,
+                  storage)
+        morphological_switch(u_switch, dxy, dθ, ξ, ε, k_s_morph_int, radius_s_morph_int, k_o_morph_int,
+                             radius_o_morph_int, k_s_morph_ext, radius_s_morph_ext, k_o_morph_ext, radius_o_morph_ext,
+                             B2, B3, laplace_perp_u, switch_morph, storage)
         # Compute derivatives
-        laplacian(u, G_D_inv, dxy, dθ, θs, laplacian_u)
-        morphological(u, G_S_inv, dxy, dθ, θs, dilation_u, erosion_u)
+        laplacian(u, G_D_inv, dxy, dθ, ξ, B1, B2, B3, laplacian_u)
+        morphological(u, G_S_inv, dxy, dθ, ξ, B1, B2, B3, dilation_u, erosion_u)
         # Step
         step_DS_filter(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
         # Update fields for switches

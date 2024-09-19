@@ -45,8 +45,7 @@ from dsfilter.SE2.LI.derivatives import (
 )
 from dsfilter.SE2.regularisers import gaussian_derivative_kernel
 
-def DS_filter(u0_np, mask_np, θs_np, ξ, T, G_D_inv_np, G_S_inv_np, σ, ρ, ν, λ, ε=0.,
-              dxy=1.):
+def DS_filter(u0_np, mask_np, θs_np, ξ, T, G_D_inv_np, G_S_inv_np, σ, ρ, ν, λ, ε=0., dxy=1.):
     """
     Perform Diffusion-Shock inpainting in SE(2), using an adaptation of the 
     R^2 Diffusion-Shock inpainting algorithm described by Schaefer and
@@ -843,7 +842,7 @@ def TV_inpainting(u0_np, mask_np, G_inv_np, dxy, dθ, θs_np, σ_s, σ_o, T, dt=
         `T`: time that image is evolved under the DS PDE.
 
     Returns:
-        np.ndarray solution to the DS PDE with initial condition `u0_np` at
+        np.ndarray solution to the TV Flow PDE with initial condition `u0_np` at
         time `T`.
     """
     if dt is None:

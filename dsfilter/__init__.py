@@ -40,4 +40,5 @@ from dsfilter.SE2.LI.filter import DS_filter as DS_filter_LI
 from dsfilter.SE2.LI.filter import DS_filter_spatial as DS_filter_spatial
 from dsfilter.SE2.LI.filter import TV_inpainting as TV_inpainting_LI
 ### Gauge
+from dsfilter.SE2.gauge.filter import DS_filter as DS_filter_gauge
 from dsfilter.SE2.gauge.filter import TV_inpainting as TV_inpainting_gauge
