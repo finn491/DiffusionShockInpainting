@@ -213,8 +213,8 @@ def compute_gauge_frame(H, ξ, ρ_s=1., ρ_o=0.5):
     B2[..., 0] = -np.sin(χ) / ξ
     B2[..., 1] = np.cos(χ) / ξ
     B3 = np.zeros_like(B1)
-    B3[..., 0] = -np.sin(χ) * np.cos(ν) / ξ
-    B3[..., 1] = -np.sin(χ) * np.sin(ν) / ξ
+    B3[..., 0] = -np.sin(ν) * np.cos(χ) / ξ
+    B3[..., 1] = -np.sin(ν) * np.sin(χ) / ξ
     B3[..., 2] = np.cos(ν)
     return B1, B2, B3
 
