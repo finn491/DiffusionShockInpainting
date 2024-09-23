@@ -36,9 +36,7 @@ from dsfilter.SE2.gauge.derivatives import (
     morphological,
     TV
 )
-from dsfilter.SE2.gauge.frame import compute_gauge_frame_and_orientation_confidence
 from dsfilter.SE2.regularisers import gaussian_derivative_kernel
-from dsfilter.SE2.utils import vectorfield_static_to_LI_np
 
 def DS_filter(u0_np, mask_np, θs_np, ξ, gauge_frame_static, T, G_D_inv_np, G_S_inv_np, σ, ρ, ν, λ, ε=0., dxy=1.):
     """
@@ -92,7 +90,7 @@ def DS_filter(u0_np, mask_np, θs_np, ξ, gauge_frame_static, T, G_D_inv_np, G_S
     shape = u0_np.shape
     _, _, Nθ = shape
     dθ = 2 * np.pi / Nθ
-    dt = compute_timestep(dxy, dθ, G_D_inv_np, G_S_inv_np)
+    dt = compute_timestep(dxy, dθ, G_D_inv_np, G_S_inv_np, ξ)
     n = int(T / dt)
 
     k_s_DS, radius_s_DS = gaussian_derivative_kernel(ν, 0, dxy=dxy)
@@ -153,9 +151,6 @@ def DS_filter(u0_np, mask_np, θs_np, ξ, gauge_frame_static, T, G_D_inv_np, G_S
         step_DS_filter(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
         # Update fields for switches
         fill_u_switch(u, u_switch)
-    # ti.sync()
-    # ti.profiler.print_kernel_profiler_info("trace")
-    # ti.profiler.clear_kernel_profiler_info()
     return u.to_numpy(), switch_DS.to_numpy(), switch_morph.to_numpy()
 
 @ti.kernel
@@ -221,7 +216,7 @@ def step_DS_filter(
         )
         u[I] += dt * du_dt[I] * (1 - mask[I]) # Only change values in the mask.
 
-def compute_timestep(dxy, dθ, G_D_inv, G_S_inv):
+def compute_timestep(dxy, dθ, G_D_inv, G_S_inv, ξ):
     """
     Compute timestep to solve Diffusion-Shock PDE.
     
@@ -238,11 +233,11 @@ def compute_timestep(dxy, dθ, G_D_inv, G_S_inv):
     Returns:
         timestep, taking values greater than 0.
     """
-    τ_D = compute_timestep_diffusion(dxy, dθ, G_D_inv)
-    τ_M = compute_timestep_shock(dxy, dθ, G_S_inv)
+    τ_D = compute_timestep_diffusion(dxy, dθ, G_D_inv, ξ)
+    τ_M = compute_timestep_shock(dxy, dθ, G_S_inv, ξ)
     return min(τ_D, τ_M)
 
-def compute_timestep_diffusion(dxy, dθ, G_D_inv):
+def compute_timestep_diffusion(dxy, dθ, G_D_inv, ξ):
     """
     Compute timestep to solve Diffusion PDE.
     
@@ -256,9 +251,10 @@ def compute_timestep_diffusion(dxy, dθ, G_D_inv):
     Returns:
         timestep, taking values greater than 0.
     """
-    return 1 / (4 * ((G_D_inv[0] + G_D_inv[1]) / dxy**2 + G_D_inv[2] / dθ**2))
+    h = ξ * dxy
+    return 1 / (4 * ((G_D_inv[0] + G_D_inv[1]) / h**2 + G_D_inv[2] / dθ**2))
 
-def compute_timestep_shock(dxy, dθ, G_S_inv):
+def compute_timestep_shock(dxy, dθ, G_S_inv, ξ):
     """
     Compute timestep to solve Shock PDE.
     
@@ -272,7 +268,8 @@ def compute_timestep_shock(dxy, dθ, G_S_inv):
     Returns:
         timestep, taking values greater than 0.
     """
-    return 1 / (np.sqrt((G_S_inv[0] + G_S_inv[1]) / dxy**2 + G_S_inv[2] / dθ**2))
+    h = ξ * dxy
+    return 1 / (np.sqrt((G_S_inv[0] + G_S_inv[1]) / h**2 + G_S_inv[2] / dθ**2))
         
 # TV-Flow
 

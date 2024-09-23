@@ -380,14 +380,14 @@ def gradient(
         sin = ti.math.sin(θ)
         I_A1 = ti.Vector([cos, sin, 0.0], dt=ti.f32) / 2
         I_A2 = ti.Vector([-sin, cos, 0.0], dt=ti.f32) / 2
-        # ||grad u|| = sqrt(G(grad u, grad u)) = sqrt(g^ij A_i u A_j u) = sqrt((A_1 u)^2 + (A_2 u)^2 + ξ^2 (A_3 u)^2)
-        gradient_perp_u[I] = ti.math.sqrt(((
+        # ||grad u|| = sqrt(G(grad u, grad u)) = sqrt(g^ij A_i u A_j u) = sqrt(ξ^-2 ((A_1 u)^2 + (A_2 u)^2) + (A_3 u)^2)
+        gradient_perp_u[I] = ti.math.sqrt(ξ**-2 * ((
                 scalar_trilinear_interpolate(u, I + I_A1) - scalar_trilinear_interpolate(u, I - I_A1)
-            ) / dxy)**2 + ((
+            ) / dxy)**2 + ξ**-2 * ((
                 scalar_trilinear_interpolate(u, I + I_A2) - scalar_trilinear_interpolate(u, I - I_A2)
-            ) / dxy)**2 # + ξ**2 * ((
-            #     scalar_trilinear_interpolate(u, I + I_A3) - scalar_trilinear_interpolate(u, I - I_A3)
-            # ) / dθ)**2
+            ) / dxy)**2 + ((
+                scalar_trilinear_interpolate(u, I + I_A3) - scalar_trilinear_interpolate(u, I - I_A3)
+            ) / dθ)**2
         )
 
 @ti.func

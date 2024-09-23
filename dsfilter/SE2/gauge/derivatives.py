@@ -56,12 +56,12 @@ def laplacian(
     for I in ti.grouped(laplacian_u):
         # Split gauge vectors into spatial and orientational part, so that we 
         # can take steps that are roughly 1 pixel in size.
-        I_B1_s = ti.Vector([B1[I][0] * ξ, B1[I][1] * ξ, 0.], dt=ti.f32) / 2
-        I_B1_o = ti.Vector([0., 0., B1[I][2]]) / 2
-        I_B2_s = ti.Vector([B2[I][0] * ξ, B2[I][1] * ξ, 0.], dt=ti.f32) / 2
-        I_B2_o = ti.Vector([0., 0., B2[I][2]]) / 2
-        I_B3_s = ti.Vector([B3[I][0] * ξ, B3[I][1] * ξ, 0.], dt=ti.f32) / 2
-        I_B3_o = ti.Vector([0., 0., B3[I][2]]) / 2
+        I_B1_s = ti.Vector([B1[I][0] * ξ, B1[I][1] * ξ, 0.], dt=ti.f32)
+        I_B1_o = ti.Vector([0., 0., B1[I][2]])
+        I_B2_s = ti.Vector([B2[I][0] * ξ, B2[I][1] * ξ, 0.], dt=ti.f32)
+        I_B2_o = ti.Vector([0., 0., B2[I][2]])
+        I_B3_s = ti.Vector([B3[I][0] * ξ, B3[I][1] * ξ, 0.], dt=ti.f32)
+        I_B3_o = ti.Vector([0., 0., B3[I][2]])
 
         B11 = (
             (scalar_trilinear_interpolate(u, I + I_B1_s) -
@@ -129,12 +129,12 @@ def morphological(
     for I in ti.grouped(dilation_u):
         # Split gauge vectors into spatial and orientational part, so that we 
         # can take steps that are roughly 1 pixel in size.
-        I_B1_s = ti.Vector([B1[I][0] * ξ, B1[I][1] * ξ, 0.], dt=ti.f32) / 2
-        I_B1_o = ti.Vector([0., 0., B1[I][2]]) / 2
-        I_B2_s = ti.Vector([B2[I][0] * ξ, B2[I][1] * ξ, 0.], dt=ti.f32) / 2
-        I_B2_o = ti.Vector([0., 0., B2[I][2]]) / 2
-        I_B3_s = ti.Vector([B3[I][0] * ξ, B3[I][1] * ξ, 0.], dt=ti.f32) / 2
-        I_B3_o = ti.Vector([0., 0., B3[I][2]]) / 2
+        I_B1_s = ti.Vector([B1[I][0] * ξ, B1[I][1] * ξ, 0.], dt=ti.f32)
+        I_B1_o = ti.Vector([0., 0., B1[I][2]])
+        I_B2_s = ti.Vector([B2[I][0] * ξ, B2[I][1] * ξ, 0.], dt=ti.f32)
+        I_B2_o = ti.Vector([0., 0., B2[I][2]])
+        I_B3_s = ti.Vector([B3[I][0] * ξ, B3[I][1] * ξ, 0.], dt=ti.f32)
+        I_B3_o = ti.Vector([0., 0., B3[I][2]])
 
         B1_forward = (
             (scalar_trilinear_interpolate(u, I + I_B1_s) - u[I]) / h +
@@ -259,10 +259,10 @@ def laplace_perp(
     """
     h = ξ * dxy
     for I in ti.grouped(laplace_perp_u):
-        I_B2_s = ti.Vector([B2[I][0] * ξ, B2[I][1] * ξ, 0.], dt=ti.f32) / 2
-        I_B2_o = ti.Vector([0., 0., B2[I][2]]) / 2
-        I_B3_s = ti.Vector([B3[I][0] * ξ, B3[I][1] * ξ, 0.], dt=ti.f32) / 2
-        I_B3_o = ti.Vector([0., 0., B3[I][2]]) / 2
+        I_B2_s = ti.Vector([B2[I][0] * ξ, B2[I][1] * ξ, 0.], dt=ti.f32)
+        I_B2_o = ti.Vector([0., 0., B2[I][2]])
+        I_B3_s = ti.Vector([B3[I][0] * ξ, B3[I][1] * ξ, 0.], dt=ti.f32)
+        I_B3_o = ti.Vector([0., 0., B3[I][2]])
         # Δ_perp u = div_perp(grad_perp(u)) = sqrt(det(g)) B_i (sqrt(det(g)) g^ij B_j u) = g^ij B_i B_j u = B_2 B_2 u + B_3 B_3 u
         laplace_perp_u[I] = ((
                 scalar_trilinear_interpolate(u, I + I_B2_s) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_B2_s)
