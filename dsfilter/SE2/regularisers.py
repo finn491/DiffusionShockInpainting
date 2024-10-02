@@ -296,30 +296,28 @@ def regularise_anisotropic(
         θ = θs[I]
         s = 0.
         norm = 0.
-        for ix in range(2*rs+1):
-            for iy in range(2*rs+1):
-                for iθ in range(2*ro+1):
-                    # Evaluate kernel at q = p + (Δx, Δy, Δθ).
-                    Δx = (-rs + ix) * dxy
-                    Δy = (-rs + iy) * dxy
-                    Δθ = (-ro + iθ) * dθ
-                    # To do so, first shift q to origin with inverse of p:
-                    #   p^-1 q = (cos(θ) Δx + sin(θ) Δy, -sin(θ) Δx + cos(θ) Δy, Δθ).
-                    # Then, we find the half angle coordinates of p^-1 q:
-                    #   b^1 := cos(θ + Δθ/2) Δx + sin(θ + Δθ/2) Δy,
-                    #   b^2 := -sin(θ + Δθ/2) Δx + cos(θ + Δθ/2) Δy,
-                    #   b^3 := Δθ.
-                    b1 = ti.math.cos(θ + Δθ/2) * Δx + ti.math.sin(θ + Δθ/2) * Δy
-                    b2 = -ti.math.sin(θ + Δθ/2) * Δx + ti.math.cos(θ + Δθ/2) * Δy
-                    b3 = Δθ
-                    # Simple distance approximation.
-                    ρsq = (w1 * b1)**2 + (w2 * b2)**2 + (w3 * b3)**2
-                    diff = ti.math.exp(-ρsq/2)
-                    norm += diff
-                    # Actually doing a correlation, but since the kernel is
-                    # symmetric, i.e. K(h^-1) = K(h), this is the same.
-                    I_step = ti.Vector([ix - rs, iy - rs, iθ - ro], ti.i32)
-                    s += u[mirror_spatially_on_grid(I + I_step, u)] * diff
+        for ix, iy, iθ in ti.ndrange(2*rs+1, 2*rs+1, 2*ro+1):
+            # Evaluate kernel at q = p + (Δx, Δy, Δθ).
+            Δx = (-rs + ix) * dxy
+            Δy = (-rs + iy) * dxy
+            Δθ = (-ro + iθ) * dθ
+            # To do so, first shift q to origin with inverse of p:
+            #   p^-1 q = (cos(θ) Δx + sin(θ) Δy, -sin(θ) Δx + cos(θ) Δy, Δθ).
+            # Then, we find the half angle coordinates of p^-1 q:
+            #   b^1 := cos(θ + Δθ/2) Δx + sin(θ + Δθ/2) Δy,
+            #   b^2 := -sin(θ + Δθ/2) Δx + cos(θ + Δθ/2) Δy,
+            #   b^3 := Δθ.
+            b1 = ti.math.cos(θ + Δθ/2) * Δx + ti.math.sin(θ + Δθ/2) * Δy
+            b2 = -ti.math.sin(θ + Δθ/2) * Δx + ti.math.cos(θ + Δθ/2) * Δy
+            b3 = Δθ
+            # Simple distance approximation.
+            ρsq = (w1 * b1)**2 + (w2 * b2)**2 + (w3 * b3)**2
+            diff = ti.math.exp(-ρsq/2)
+            norm += diff
+            # Actually doing a correlation, but since the kernel is symmetric,
+            # i.e. K(h^-1) = K(h), this is the same.
+            I_step = ti.Vector([ix - rs, iy - rs, iθ - ro], ti.i32)
+            s += u[mirror_spatially_on_grid(I + I_step, u)] * diff
         u_convolved[I] = s / norm
 
 

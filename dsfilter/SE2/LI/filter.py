@@ -108,7 +108,7 @@ def DS_filter(u0_np, mask_np, θs_np, ξ, T, G_D_inv_np, G_S_inv_np, σ, ρ, ν,
     k_o_morph_ext, radius_o_morph_ext = gaussian_derivative_kernel(ρ * ξ, 0, dxy=dθ)
 
     # Initialise TaiChi objects
-    θs = ti.field(ti.f32, shape=shape)
+    θs = ti.field(dtype=ti.f32, shape=shape)
     θs.from_numpy(θs_np)
     G_D_inv = ti.Vector(G_D_inv_np, dt=ti.f32)
     G_S_inv = ti.Vector(G_S_inv_np, dt=ti.f32)
@@ -350,7 +350,7 @@ def DS_filter_spatial(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_s, �
     k_o_morph_ext, radius_o_morph_ext = gaussian_derivative_kernel(ρ_o, 0, dxy=dθ)
 
     # Initialise TaiChi objects
-    θs = ti.field(ti.f32, shape=shape)
+    θs = ti.field(dtype=ti.f32, shape=shape)
     θs.from_numpy(θs_np)
     G_D_inv = ti.Vector(G_D_inv_np[:-1], dt=ti.f32)
     G_S_inv = ti.Vector(G_S_inv_np[:-1], dt=ti.f32)

@@ -350,13 +350,12 @@ def gradient(
     dθ: ti.f32,
     θs: ti.template(),
     ξ: ti.f32,
-    gradient_perp_u: ti.template()
+    gradient_u: ti.template()
 ):
     """
     @taichi.func
 
-    Compute an approximation of the perpendicular gradient of `u` using central
-    differences.
+    Compute an approximation of the gradient of `u` using central differences.
 
     Args:
       Static:
@@ -370,22 +369,22 @@ def gradient(
           orientatonal direction relative to moving one unit in a spatial
           direction, taking values greater than 0.
       Mutated:
-        `gradient_perp_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ])
-          perpendicular gradient of u, which is updated in place.
+        `gradient_u`: ti.field(dtype=[float], shape=[Nx, Ny, Nθ]) gradient of u,
+          which is updated in place.
     """
     I_A3 = ti.Vector([0.0, 0.0, 1.0], dt=ti.f32) / 2
-    for I in ti.grouped(gradient_perp_u):
+    for I in ti.grouped(gradient_u):
         θ = θs[I]
         cos = ti.math.cos(θ)
         sin = ti.math.sin(θ)
         I_A1 = ti.Vector([cos, sin, 0.0], dt=ti.f32) / 2
         I_A2 = ti.Vector([-sin, cos, 0.0], dt=ti.f32) / 2
         # ||grad u|| = sqrt(G(grad u, grad u)) = sqrt(g^ij A_i u A_j u) = sqrt(ξ^-2 ((A_1 u)^2 + (A_2 u)^2) + (A_3 u)^2)
-        gradient_perp_u[I] = ti.math.sqrt(ξ**-2 * ((
+        gradient_u[I] = ti.math.sqrt(((
                 scalar_trilinear_interpolate(u, I + I_A1) - scalar_trilinear_interpolate(u, I - I_A1)
-            ) / dxy)**2 + ξ**-2 * ((
+            ) / (ξ * dxy))**2 + ((
                 scalar_trilinear_interpolate(u, I + I_A2) - scalar_trilinear_interpolate(u, I - I_A2)
-            ) / dxy)**2 + ((
+            ) / (ξ * dxy))**2 + ((
                 scalar_trilinear_interpolate(u, I + I_A3) - scalar_trilinear_interpolate(u, I - I_A3)
             ) / dθ)**2
         )
@@ -533,9 +532,9 @@ def laplace_perp(
         # Δ_perp u = div_perp(grad_perp(u)) = sqrt(det(g)) A_i (sqrt(det(g)) g^ij A_j u) = g^ij A_i A_j u = A_2 A_2 u + ξ^2 A_3 A_3 u
         laplace_perp_u[I] = ((
                 scalar_trilinear_interpolate(u, I + I_A2) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_A2)
-            ) / dxy**2 # + ξ**2 * (
-            #     scalar_trilinear_interpolate(u, I + I_A3) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_A3)
-            # ) / dθ**2
+            ) / (ξ * dxy)**2 + (
+                scalar_trilinear_interpolate(u, I + I_A3) - 2 * u[I] + scalar_trilinear_interpolate(u, I - I_A3)
+            ) / dθ**2
         )
 
     # I_A3 = ti.Vector([0.0, 0.0, 1.0], dt=ti.f32)
