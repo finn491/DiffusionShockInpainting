@@ -130,6 +130,55 @@ def g_scalar(
     """
     return 1 / ti.math.sqrt(1 + s_squared / λ**2)
 
+# Quality Measures
+
+@ti.kernel
+def compute_PSNR(
+    denoised: ti.template(),
+    ground_truth: ti.template(),
+    max_val: ti.f32
+) -> ti.f32:
+    shape = ground_truth.shape
+    N = shape[0] * shape[1]
+
+    squared_difference = 0.
+    for I in ti.grouped(denoised):
+        squared_difference += (denoised[I] - ground_truth[I])**2
+    mean_squared_difference = squared_difference / N
+
+    return 10 * ti.log(max_val**2 / mean_squared_difference) / ti.log(10)
+
+@ti.kernel
+def compute_L2(
+    denoised: ti.template(),
+    ground_truth: ti.template()
+) -> ti.f32:
+    shape = ground_truth.shape
+    N = shape[0] * shape[1]
+    
+    squared_difference = 0.
+    for I in ti.grouped(denoised):
+        squared_difference += (denoised[I] - ground_truth[I])**2
+    mean_squared_difference = squared_difference / N
+
+    return ti.sqrt(mean_squared_difference)
+
+@ti.kernel
+def compute_L1(
+    denoised: ti.template(),
+    ground_truth: ti.template()
+) -> ti.f32:
+    shape = ground_truth.shape
+    N = shape[0] * shape[1]
+    
+    absolute_difference = 0.
+    for I in ti.grouped(denoised):
+        absolute_difference += ti.abs(denoised[I] - ground_truth[I])
+    mean_absolute_difference = absolute_difference / N
+
+    return mean_absolute_difference
+
+
 # Padding
 
 def pad_array(u, pad_value=0., pad_shape=1):

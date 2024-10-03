@@ -31,7 +31,10 @@ def clean_mask_boundaries(u, mask):
 @ti.kernel
 def project_down(
     U: ti.template(),
-    u: ti.template()
+    u: ti.template(),
+    clip_l: ti.f32,
+    clip_r: ti.f32,
+    scale: ti.f32,
 ):
     """
     @taichi.kernel
@@ -51,7 +54,8 @@ def project_down(
     for I in ti.grouped(u):
         u[I] = 0.
         for i in range(Nθ):
-            u[I] += U[I, i]
+            u[I] += U[I, i] / scale
+        ti.math.clamp(u[I], clip_l, clip_r)
 
 # Safe Indexing
 

@@ -31,14 +31,16 @@ import dsfilter.SE2
 
 # Most important functions are available at top level
 ## R2
-from dsfilter.R2.filter import DS_filter as DS_filter_R2
+from dsfilter.R2.filter import DS_inpainting as DS_inpainting_R2
+from dsfilter.R2.filter import DS_enhancing as DS_enhancing_R2
 ## R3
 from dsfilter.R3.filter import DS_filter as DS_filter_R3
 ## SE(2)
 ### Left invariant
-from dsfilter.SE2.LI.filter import DS_filter as DS_filter_LI
-from dsfilter.SE2.LI.filter import DS_filter_spatial as DS_filter_spatial
-from dsfilter.SE2.LI.filter import TV_inpainting as TV_inpainting_LI
+from dsfilter.SE2.LI.filter import DS_inpainting as DS_inpainting_LI
+from dsfilter.SE2.LI.filter import DS_inpainting_spatial as DS_inpainting_spatial
+from dsfilter.SE2.LI.filter import DS_enhancing as DS_enhancing_LI
+from dsfilter.SE2.LI.filter import TV_enhancing as TV_enhancing_LI
 ### Gauge
-from dsfilter.SE2.gauge.filter import DS_filter as DS_filter_gauge
-from dsfilter.SE2.gauge.filter import TV_inpainting as TV_inpainting_gauge
+from dsfilter.SE2.gauge.filter import DS_enhancing as DS_enhancing_gauge
+from dsfilter.SE2.gauge.filter import TV_enhancing as TV_enhancing_gauge

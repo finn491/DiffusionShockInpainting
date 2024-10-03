@@ -37,8 +37,15 @@ from dsfilter.SE2.gauge.derivatives import (
     TV
 )
 from dsfilter.SE2.regularisers import gaussian_derivative_kernel
+from dsfilter.SE2.utils import project_down
+from dsfilter.utils import (
+    compute_PSNR,
+    compute_L2,
+    compute_L1
+)
 
-def DS_filter(u0_np, mask_np, θs_np, ξ, gauge_frame_static, T, G_D_inv_np, G_S_inv_np, σ, ρ, ν, λ, ε=0., dxy=1.):
+def DS_enhancing(u0_np, ground_truth_np, θs_np, ξ, gauge_frame_static, T, G_D_inv_np, G_S_inv_np, σ, ρ, ν, λ, ε=0.,
+                 dxy=1.):
     """
     Perform Diffusion-Shock inpainting in SE(2), using an adaptation of the 
     R^2 Diffusion-Shock inpainting algorithm described by Schaefer and
@@ -105,8 +112,6 @@ def DS_filter(u0_np, mask_np, θs_np, ξ, gauge_frame_static, T, G_D_inv_np, G_S
     θs.from_numpy(θs_np)
     G_D_inv = ti.Vector(G_D_inv_np, dt=ti.f32)
     G_S_inv = ti.Vector(G_S_inv_np, dt=ti.f32)
-    mask = ti.field(dtype=ti.f32, shape=shape)
-    mask.from_numpy(mask_np)
     du_dt = ti.field(dtype=ti.f32, shape=shape)
 
     ## Padded versions for derivatives
@@ -137,6 +142,16 @@ def DS_filter(u0_np, mask_np, θs_np, ξ, gauge_frame_static, T, G_D_inv_np, G_S
     B3 = ti.Vector.field(3, dtype=ti.f32, shape=shape)
     B3.from_numpy(B3_np)
 
+    ## Image Quality Measures
+    max_val = 255. # Images are assumed to take gray values in [0, 255].
+    ground_truth = ti.field(dtype=ti.f32, shape=shape[:-1])
+    ground_truth.from_numpy(ground_truth_np)
+    u_projected = ti.field(dtype=ti.f32, shape=shape[:-1])
+    project_down(u, u_projected, 0., max_val, 1.)
+    PSNR = [compute_PSNR(u_projected, ground_truth, max_val)]
+    L1 = [compute_L1(u_projected, ground_truth)]
+    L2 = [compute_L2(u_projected, ground_truth)]
+
     for _ in tqdm(range(n)):
         # Compute switches
         DS_switch(u_switch, dxy, dθ, ξ, k_s_DS, radius_s_DS, k_o_DS, radius_o_DS, λ, B2, B3, gradient_perp_u, switch_DS,
@@ -148,15 +163,19 @@ def DS_filter(u0_np, mask_np, θs_np, ξ, gauge_frame_static, T, G_D_inv_np, G_S
         laplacian(u, G_D_inv, dxy, dθ, ξ, B1, B2, B3, laplacian_u)
         morphological(u, G_S_inv, dxy, dθ, ξ, B1, B2, B3, dilation_u, erosion_u)
         # Step
-        step_DS_filter(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
+        step_DS(u, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
         # Update fields for switches
         fill_u_switch(u, u_switch)
-    return u.to_numpy(), switch_DS.to_numpy(), switch_morph.to_numpy()
+
+        project_down(u, u_projected, 0., max_val, 1.)
+        PSNR.append(compute_PSNR(u_projected, ground_truth, max_val))
+        L2.append(compute_L2(u_projected, ground_truth))
+        L1.append(compute_L1(u_projected, ground_truth))
+    return u.to_numpy(), PSNR, L2, L1, switch_DS.to_numpy(), switch_morph.to_numpy()
 
 @ti.kernel
-def step_DS_filter(
+def step_DS(
     u: ti.template(),
-    mask: ti.template(),
     dt: ti.f32,
     switch_DS: ti.template(),
     switch_morph: ti.template(),
@@ -174,7 +193,6 @@ def step_DS_filter(
 
     Args:
       Static:
-        `mask`: ti.field(dtype=[float], shape=[Nx, Ny]) inpainting mask.
         `dt`: step size, taking values greater than 0.
         `switch_DS`: ti.field(dtype=ti.f32, shape=[Nx, Ny]) of values that
           determine the degree of diffusion or shock, taking values between 0
@@ -214,7 +232,7 @@ def step_DS_filter(
                 dilation_u[I] * (switch_morph[I] < 0.) * ti.abs(switch_morph[I])
             )
         )
-        u[I] += dt * du_dt[I] * (1 - mask[I]) # Only change values in the mask.
+        u[I] += dt * du_dt[I]
 
 def compute_timestep(dxy, dθ, G_D_inv, G_S_inv, ξ):
     """
@@ -273,7 +291,7 @@ def compute_timestep_shock(dxy, dθ, G_S_inv, ξ):
         
 # TV-Flow
 
-def TV_inpainting(u0_np, mask_np, G_inv_np, ξ, dxy, dθ, gauge_frame_static, σ_s, σ_o, T, dt=None):
+def TV_enhancing(u0_np_unscaled, ground_truth_np, G_inv_np, ξ, dxy, dθ, gauge_frame_static, σ_s, σ_o, T, dt=None, λ=1.):
     """
     Perform Total Variation (TV) Flow inpainting in SE(2).
 
@@ -304,11 +322,10 @@ def TV_inpainting(u0_np, mask_np, G_inv_np, ξ, dxy, dθ, gauge_frame_static, σ
     n = int(T / dt)
     k_s, radius_s = gaussian_derivative_kernel(σ_s, 0)
     k_o, radius_o = gaussian_derivative_kernel(σ_o, 0)
+    u0_np = u0_np_unscaled * λ
     shape = u0_np.shape
     u = ti.field(dtype=ti.f32, shape=shape)
     u.from_numpy(u0_np)
-    mask =ti.field(dtype=ti.f32, shape=shape)
-    mask.from_numpy(mask_np)
     G_inv = ti.Matrix(G_inv_np, dt=ti.f32)
     B1_u = ti.field(dtype=ti.f32, shape=shape)
     B2_u = ti.field(dtype=ti.f32, shape=shape)
@@ -328,16 +345,30 @@ def TV_inpainting(u0_np, mask_np, G_inv_np, ξ, dxy, dθ, gauge_frame_static, σ
     B3 = ti.Vector.field(3, dtype=ti.f32, shape=shape)
     B3.from_numpy(B3_np)
 
+    ## Image Quality Measures
+    max_val = 255. # Images are assumed to take gray values in [0, 255].
+    ground_truth = ti.field(dtype=ti.f32, shape=shape[:-1])
+    ground_truth.from_numpy(ground_truth_np)
+    u_projected = ti.field(dtype=ti.f32, shape=shape[:-1])
+    project_down(u, u_projected, 0., max_val, λ)
+    PSNR = [compute_PSNR(u_projected, ground_truth, max_val)]
+    L1 = [compute_L1(u_projected, ground_truth)]
+    L2 = [compute_L2(u_projected, ground_truth)]
+
     for _ in tqdm(range(n)):
         TV(u, G_inv, dxy, dθ, ξ, B1, B2, B3, k_s, radius_s, k_o, radius_o, B1_u, B2_u, B3_u, grad_norm_u,
            normalised_grad_1, normalised_grad_2, normalised_grad_3, TV_u, storage)
-        step_TV_inpainting(u, mask, dt, TV_u)
-    return u.to_numpy()
+        step_TV(u, dt, TV_u)
+
+        project_down(u, u_projected, 0., max_val, λ)
+        PSNR.append(compute_PSNR(u_projected, ground_truth, max_val))
+        L2.append(compute_L2(u_projected, ground_truth))
+        L1.append(compute_L1(u_projected, ground_truth))
+    return u.to_numpy() / λ, PSNR, L2, L1
     
 @ti.kernel
-def step_TV_inpainting(
+def step_TV(
     u: ti.template(),
-    mask: ti.template(),
     dt: ti.f32,
     TV_u: ti.template(),
 ):
@@ -357,7 +388,7 @@ def step_TV_inpainting(
           with the shock PDE.
     """
     for I in ti.grouped(TV_u):
-        u[I] += dt * TV_u[I] * (1 - mask[I])
+        u[I] += dt * TV_u[I]
 
 def compute_timestep_TV(dxy, dθ, G_inv, ξ):
     """

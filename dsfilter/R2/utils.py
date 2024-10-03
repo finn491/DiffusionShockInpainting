@@ -80,6 +80,15 @@ def index_reflected(
     index = sanitize_reflected_index(index, input)
     return input[index]
 
+# @ti.kernel
+# def clamp_field(
+#     u: ti.template(),
+#     clip_l: ti.f32,
+#     clip_r: ti.f32,
+# ):
+#     for I in ti.grouped(u):
+#         u[I] = ti.math.clamp(u[I], clip_l, clip_r)
+
 # Interpolate
 
 @ti.func
