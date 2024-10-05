@@ -9,19 +9,10 @@
       (https://www.win.tue.nl/~rduits/THESISRDUITS.pdf).
       2. `wavelet_transform`: compute the real wavelet transform of a 2D image,
       with respect to some wavelet (which need not be a cakewavelet).
-      3. `wavelet_transform_complex`: compute the complex wavelet transform of a
-      2D image, with respect to some wavelet (which need not be a cakewavelet).
-      TODO: figure out why `wavelet_transform_complex` does not work...
 """
 
 import numpy as np
 import scipy as sp
-
-def rotate_left(array, rotation_amount):
-    return np.roll(array, -rotation_amount, axis=(0, 1))
-    
-def rotate_right(array, rotation_amount):
-    return np.roll(array, +rotation_amount, axis=(0, 1))
 
 def mod_offset(x, period, offset):
     """Compute `x` modulo `period` with offset `offset`."""
@@ -210,10 +201,9 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
     cake_fourier[:, (N_spatial//2 - 5):(N_spatial//2 + 6), (N_spatial//2 - 5):(N_spatial//2 + 6)] = dθ / (2 * np.pi)
 
     cake = np.zeros_like(cake_fourier, dtype=np.complex_)
-    rotation_amount = np.array((N_spatial // 2, N_spatial // 2))
     window = Gauss_window(N_spatial, Gaussian_σ)
     for i, slice_fourier in enumerate(cake_fourier):
-        slice_fourier = rotate_left(slice_fourier, rotation_amount)
+        slice_fourier = np.fft.fftshift(slice_fourier)
         # Mathematica uses Fourier parameters {a, b} = {0, 1} by default, while
         # NumPy uses {a, b} = {1, -1}. The inverse Fourier transform is then
         # given by (http://reference.wolfram.com/language/ref/InverseFourier.html)
@@ -227,7 +217,7 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
         # However, if we use NumPy's convention, we can forget about n when
         # performing convolutions, so we don't multiply by n^(1/2).
         slice = np.conj(np.fft.ifftn(slice_fourier))
-        slice = rotate_right(slice, rotation_amount)
+        slice = np.fft.fftshift(slice)
         cake[i] = slice * window
     return cake
 
@@ -244,10 +234,9 @@ def wavelet_transform(f, kernels):
         kernels = np.pad(kernels, pad_width=((0, 0), (pad_1_l, pad_1_r), (pad_2_l, pad_2_r)), mode="edge")
 
     f_hat = np.fft.fftn(f)
-    rotation_amount = np.ceil(0.1 + np.array(shape) / 2).astype(int)
     for i, ψ_θ in enumerate(kernels):
         ψ_θ_hat = np.fft.fftn(np.flip(ψ_θ, axis=(0, 1)))
         U_θ = np.fft.ifftn(ψ_θ_hat * f_hat)
-        U_θ = rotate_right(U_θ, rotation_amount)
+        U_θ = np.fft.fftshift(U_θ)
         ost[i] = U_θ
     return ost
