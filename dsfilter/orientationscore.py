@@ -23,30 +23,31 @@ def Gauss_window(N_spatial, σ_s):
     Compute a Gaussian envelope, which can be used as a low pass filter by 
     multiplying pointwise in the Fourier domain.
     """
-    xs, ys = np.meshgrid(np.arange(-np.floor(N_spatial / 2), np.ceil(N_spatial / 2)),
-                         np.arange(-np.floor(N_spatial / 2), np.ceil(N_spatial / 2)),
-                         indexing="ij")
-    out = np.exp(-(xs**2 + ys**2) / (2 * σ_s**2))
-    return out
+    xs = np.arange(-np.floor(N_spatial / 2), np.ceil(N_spatial / 2))
+    ys = np.arange(-np.floor(N_spatial / 2), np.ceil(N_spatial / 2))
+    window = np.exp(-(xs[:, None]**2 + ys[None, :]**2) / (2 * σ_s**2))
+    return window
 
 def angular_grid(N_spatial):
     """Compute a grid of angle coordinates."""
     centerx = np.ceil((N_spatial - 1) / 2)
     centery = centerx
-    xs, ys = np.meshgrid(np.arange(N_spatial), np.arange(N_spatial), indexing="ij")
+    xs = np.arange(N_spatial)
+    ys = np.arange(N_spatial)
     dxs = xs - centerx
     dys = ys - centery
-    θs = np.arctan2(dys, dxs)
+    θs = np.arctan2(dys[None, :], dxs[:, None])
     return θs
 
 def radial_grid(N_spatial):
     """Compute a grid of radial coordinates."""
     centerx = N_spatial // 2
     centery = centerx
-    xs, ys = np.meshgrid(np.arange(N_spatial), np.arange(N_spatial), indexing="ij")
+    xs = np.arange(N_spatial)
+    ys = np.arange(N_spatial)
     dxs = xs - centerx
     dys = ys - centery
-    rs = 2 * np.sqrt(dxs**2 + dys**2) / N_spatial #  + np.finfo(np.float64).eps)
+    rs = 2 * np.sqrt(dxs[:, None]**2 + dys[None, :]**2) / N_spatial #  + np.finfo(np.float64).eps)
     return rs
 
 def radial_window(N_spatial, n, inflection_point):
