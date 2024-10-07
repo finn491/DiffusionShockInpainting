@@ -237,10 +237,18 @@ def wavelet_transform(f, kernels):
     kernels_shape = kernels.shape
     ost = np.zeros((kernels_shape[0], *shape), dtype=np.complex_)
     if kernels_shape[1:] != shape: # Pad kernels so we can convolve by multiplication in Fourier domain.
-        pad_1_l = int(np.ceil((shape[0] - kernels_shape[1]) / 2))
-        pad_1_r = int(np.floor((shape[0] - kernels_shape[1]) / 2))
-        pad_2_l = int(np.ceil((shape[1] - kernels_shape[2]) / 2))
-        pad_2_r = int(np.floor((shape[1] - kernels_shape[2]) / 2))
+        if kernels_shape[1] % 2 == 0:
+            pad_1_l = int(np.floor((shape[0] - kernels_shape[1]) / 2))
+            pad_1_r = int(np.ceil((shape[0] - kernels_shape[1]) / 2))
+        else:
+            pad_1_l = int(np.ceil((shape[0] - kernels_shape[1]) / 2))
+            pad_1_r = int(np.floor((shape[0] - kernels_shape[1]) / 2))
+        if kernels_shape[2] % 2 == 0:
+            pad_2_l = int(np.floor((shape[1] - kernels_shape[2]) / 2))
+            pad_2_r = int(np.ceil((shape[1] - kernels_shape[2]) / 2))
+        else:
+            pad_2_l = int(np.ceil((shape[1] - kernels_shape[2]) / 2))
+            pad_2_r = int(np.floor((shape[1] - kernels_shape[2]) / 2))
         kernels = np.pad(kernels, pad_width=((0, 0), (pad_1_l, pad_1_r), (pad_2_l, pad_2_r)), mode="edge")
 
     f_hat = np.fft.fftn(f)
