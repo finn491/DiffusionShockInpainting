@@ -151,10 +151,7 @@ def DS_inpainting(u0_np, mask_np, θs_np, ξ, T, G_D_inv_np, G_S_inv_np, σ, ρ,
         step_DS(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
         # Update fields for switches
         fill_u_switch(u, u_switch)
-    # ti.sync()
-    # ti.profiler.print_kernel_profiler_info("trace")
-    # ti.profiler.clear_kernel_profiler_info()
-    return u.to_numpy(), switch_DS.to_numpy(), switch_morph.to_numpy()
+    return u.to_numpy()
 
 def DS_enhancing(u0_np, ground_truth_np, θs_np, ξ, T, G_D_inv_np, G_S_inv_np, σ, ρ, ν, λ, ε=0., dxy=1.):
     """
@@ -397,10 +394,7 @@ def DS_inpainting_spatial(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_
         step_DS(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
         # Update fields for switches
         fill_u_switch(u, u_switch)
-    # ti.sync()
-    # ti.profiler.print_kernel_profiler_info("trace")
-    # ti.profiler.clear_kernel_profiler_info()
-    return u.to_numpy(), switch_DS.to_numpy(), switch_morph.to_numpy()
+    return u.to_numpy()
 
 @ti.kernel
 def step_DS(

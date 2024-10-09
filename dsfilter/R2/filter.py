@@ -133,7 +133,7 @@ def DS_inpainting(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
         step_DS(u, mask, dt, switch_DS, switch_morph, laplacian_u, dilation_u, erosion_u, du_dt)
         # Update fields for switches
         fill_u_switch(u, u_switch)
-    return u.to_numpy(), switch_DS.to_numpy(), switch_morph.to_numpy()
+    return u.to_numpy()
 
 def DS_enhancing(u0_np, ground_truth_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
     """
