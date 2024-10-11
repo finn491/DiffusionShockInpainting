@@ -171,7 +171,7 @@ def DS_enhancing(u0_np, ground_truth_np, θs_np, ξ, gauge_frame_static, T, G_D_
         PSNR.append(compute_PSNR(u_projected, ground_truth, max_val))
         L2.append(compute_L2(u_projected, ground_truth))
         L1.append(compute_L1(u_projected, ground_truth))
-    return u.to_numpy(), PSNR, L2, L1, switch_DS.to_numpy(), switch_morph.to_numpy()
+    return u.to_numpy(), np.array(PSNR), np.array(L2), np.array(L1), switch_DS.to_numpy(), switch_morph.to_numpy()
 
 @ti.kernel
 def step_DS(
@@ -364,7 +364,7 @@ def TV_enhancing(u0_np_unscaled, ground_truth_np, G_inv_np, ξ, dxy, dθ, gauge_
         PSNR.append(compute_PSNR(u_projected, ground_truth, max_val))
         L2.append(compute_L2(u_projected, ground_truth))
         L1.append(compute_L1(u_projected, ground_truth))
-    return u.to_numpy() / λ, PSNR, L2, L1
+    return u.to_numpy() / λ, np.array(PSNR), np.array(L2), np.array(L1)
     
 @ti.kernel
 def step_TV(

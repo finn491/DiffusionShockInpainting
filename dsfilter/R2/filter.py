@@ -244,7 +244,7 @@ def DS_enhancing(u0_np, ground_truth_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
         PSNR.append(compute_PSNR(u, ground_truth, max_val))
         L2.append(compute_L2(u, ground_truth))
         L1.append(compute_L1(u, ground_truth))
-    return u.to_numpy(), PSNR, L2, L1, switch_DS.to_numpy(), switch_morph.to_numpy()
+    return u.to_numpy(), np.array(PSNR), np.array(L2), np.array(L1), switch_DS.to_numpy(), switch_morph.to_numpy()
 
 def compute_timestep(dxy, δ=np.sqrt(2)-1):
     """

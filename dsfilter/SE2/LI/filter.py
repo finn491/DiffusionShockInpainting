@@ -275,7 +275,7 @@ def DS_enhancing(u0_np, ground_truth_np, θs_np, ξ, T, G_D_inv_np, G_S_inv_np, 
     # ti.sync()
     # ti.profiler.print_kernel_profiler_info("trace")
     # ti.profiler.clear_kernel_profiler_info()
-    return u.to_numpy(), PSNR, L2, L1, switch_DS.to_numpy(), switch_morph.to_numpy()
+    return u.to_numpy(), np.array(PSNR), np.array(L2), np.array(L1), switch_DS.to_numpy(), switch_morph.to_numpy()
 
 def DS_inpainting_spatial(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_s, σ_o, ρ_s, ρ_o, ν_s, ν_o, λ, ε=0.,
                           dxy=1.):
@@ -749,7 +749,7 @@ def TV_enhancing(u0_np_unscaled, ground_truth_np, G_inv_np, dxy, dθ, θs_np, σ
         PSNR.append(compute_PSNR(u_projected, ground_truth, max_val))
         L2.append(compute_L2(u_projected, ground_truth))
         L1.append(compute_L1(u_projected, ground_truth))
-    return u.to_numpy() / λ, PSNR, L2, L1
+    return u.to_numpy() / λ, np.array(PSNR), np.array(L2), np.array(L1)
     
 @ti.kernel
 def step_TV(
