@@ -36,7 +36,7 @@ from dsfilter.SE2.gauge.derivatives import (
     morphological,
     TV
 )
-from dsfilter.SE2.regularisers import gaussian_derivative_kernel
+from dsfilter.SE2.regularisers import gaussian_kernel
 from dsfilter.SE2.utils import project_down
 from dsfilter.utils import (
     compute_PSNR,
@@ -100,12 +100,12 @@ def DS_enhancing(u0_np, ground_truth_np, θs_np, ξ, gauge_frame_static, T, G_D_
     dt = compute_timestep(dxy, dθ, G_D_inv_np, G_S_inv_np, ξ)
     n = int(T / dt)
 
-    k_s_DS, radius_s_DS = gaussian_derivative_kernel(ν, 0, dxy=dxy)
-    k_o_DS, radius_o_DS = gaussian_derivative_kernel(ν * ξ, 0, dxy=dθ)
-    k_s_morph_int, radius_s_morph_int = gaussian_derivative_kernel(σ, 0, dxy=dxy)
-    k_o_morph_int, radius_o_morph_int = gaussian_derivative_kernel(σ * ξ, 0, dxy=dθ)
-    k_s_morph_ext, radius_s_morph_ext = gaussian_derivative_kernel(ρ, 0, dxy=dxy)
-    k_o_morph_ext, radius_o_morph_ext = gaussian_derivative_kernel(ρ * ξ, 0, dxy=dθ)
+    k_s_DS, radius_s_DS = gaussian_kernel(ν, dxy=dxy)
+    k_o_DS, radius_o_DS = gaussian_kernel(ν * ξ, dxy=dθ)
+    k_s_morph_int, radius_s_morph_int = gaussian_kernel(σ, dxy=dxy)
+    k_o_morph_int, radius_o_morph_int = gaussian_kernel(σ * ξ, dxy=dθ)
+    k_s_morph_ext, radius_s_morph_ext = gaussian_kernel(ρ, dxy=dxy)
+    k_o_morph_ext, radius_o_morph_ext = gaussian_kernel(ρ * ξ, dxy=dθ)
 
     # Initialise TaiChi objects
     θs = ti.field(ti.f32, shape=shape)
@@ -320,8 +320,8 @@ def TV_enhancing(u0_np_unscaled, ground_truth_np, G_inv_np, ξ, dxy, dθ, gauge_
         dt = compute_timestep_TV(dxy, dθ, G_inv_np, ξ)
     print(dt)
     n = int(T / dt)
-    k_s, radius_s = gaussian_derivative_kernel(σ_s, 0)
-    k_o, radius_o = gaussian_derivative_kernel(σ_o, 0)
+    k_s, radius_s = gaussian_kernel(σ_s)
+    k_o, radius_o = gaussian_kernel(σ_o)
     u0_np = u0_np_unscaled * λ
     shape = u0_np.shape
     u = ti.field(dtype=ti.f32, shape=shape)

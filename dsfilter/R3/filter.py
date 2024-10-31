@@ -29,7 +29,7 @@ from dsfilter.R3.derivatives import (
     laplacian,
     morphological
 )
-from dsfilter.R3.regularisers import gaussian_derivative_kernel
+from dsfilter.R3.regularisers import gaussian_kernel
 from dsfilter.utils import unpad_array
 
 def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1., dz = 1.):
@@ -77,13 +77,13 @@ def DS_filter(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1., dz = 1.):
     dt = 0.05
     n = int(T / dt)
     # We reuse the Gaussian kernels
-    k_DS, radius_DS = gaussian_derivative_kernel(ν, 0)
-    k_morph_int, radius_morph_int = gaussian_derivative_kernel(σ, 0)
-    k_morph_ext, radius_morph_ext = gaussian_derivative_kernel(ρ, 0)
+    k_DS, radius_DS = gaussian_kernel(ν)
+    k_morph_int, radius_morph_int = gaussian_kernel(σ)
+    k_morph_ext, radius_morph_ext = gaussian_kernel(ρ)
 
-    k_DSz, radius_DSz = gaussian_derivative_kernel(ν*factor, 0, dxy = dz)
-    k_morph_intz, radius_morph_intz = gaussian_derivative_kernel(σ*factor, 0, dxy = dz)
-    k_morph_extz, radius_morph_extz = gaussian_derivative_kernel(ρ*factor, 0, dxy = dz)
+    k_DSz, radius_DSz = gaussian_kernel(ν*factor, dxy = dz)
+    k_morph_intz, radius_morph_intz = gaussian_kernel(σ*factor, dxy = dz)
+    k_morph_extz, radius_morph_extz = gaussian_kernel(ρ*factor, dxy = dz)
 
     # Initialise TaiChi objects
     shape = u0_np.shape

@@ -29,7 +29,7 @@ from dsfilter.R2.derivatives import (
     laplacian,
     morphological
 )
-from dsfilter.R2.regularisers import gaussian_derivative_kernel
+from dsfilter.R2.regularisers import gaussian_kernel
 from dsfilter.utils import (
     compute_PSNR,
     compute_L2,
@@ -80,9 +80,9 @@ def DS_inpainting(u0_np, mask_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
     dt = compute_timestep(dxy)
     n = int(T / dt)
     # We reuse the Gaussian kernels
-    k_DS, radius_DS = gaussian_derivative_kernel(ν, 0)
-    k_morph_int, radius_morph_int = gaussian_derivative_kernel(σ, 0)
-    k_morph_ext, radius_morph_ext = gaussian_derivative_kernel(ρ, 0)
+    k_DS, radius_DS = gaussian_kernel(ν)
+    k_morph_int, radius_morph_int = gaussian_kernel(σ)
+    k_morph_ext, radius_morph_ext = gaussian_kernel(ρ)
 
     # Initialise TaiChi objects
     shape = u0_np.shape
@@ -179,9 +179,9 @@ def DS_enhancing(u0_np, ground_truth_np, T, σ, ρ, ν, λ, ε=0., dxy=1.):
     dt = compute_timestep(dxy)
     n = int(T / dt)
     # We reuse the Gaussian kernels
-    k_DS, radius_DS = gaussian_derivative_kernel(ν, 0)
-    k_morph_int, radius_morph_int = gaussian_derivative_kernel(σ, 0)
-    k_morph_ext, radius_morph_ext = gaussian_derivative_kernel(ρ, 0)
+    k_DS, radius_DS = gaussian_kernel(ν)
+    k_morph_int, radius_morph_int = gaussian_kernel(σ)
+    k_morph_ext, radius_morph_ext = gaussian_kernel(ρ)
 
     # Initialise TaiChi objects
     shape = u0_np.shape

@@ -7,8 +7,8 @@
       1. `cakewavelet_stack`: compute the stack of cakewavelets, as described in
       Duits "Perceptual Organization in Image Analysis" (2005)
       (https://www.win.tue.nl/~rduits/THESISRDUITS.pdf).
-      2. `wavelet_transform`: compute the real wavelet transform of a 2D image,
-      with respect to some wavelet (which need not be a cakewavelet).
+      2. `wavelet_transform`: compute the wavelet transform of a 2D image, with
+      respect to some wavelet (which need not be a cakewavelet).
 """
 
 import numpy as np
@@ -26,37 +26,28 @@ def mod_offset(x, period, offset):
 
 def Gauss_window(N_spatial, σ_s):
     """
-    Compute a Gaussian envelope, which can be used as a low pass filter by 
-    multiplying pointwise in the Fourier domain.
+    Compute a Gaussian envelope, which can be used to cut off the tails of
+    cakewavelets.
     """
     xs = np.arange(-np.floor(N_spatial / 2), np.ceil(N_spatial / 2))
     ys = np.arange(-np.floor(N_spatial / 2), np.ceil(N_spatial / 2))
     window = np.exp(-(xs[:, None]**2 + ys[None, :]**2) / (2 * σ_s**2))
     return window
 
-def angular_grid(N_spatial):
-    """Compute a grid of angle coordinates."""
+def polar_grids(N_spatial):
+    """Compute a grid of radial and angle coordinates."""
     centerx = np.ceil((N_spatial - 1) / 2)
     centery = centerx
     xs = np.arange(N_spatial)
     ys = np.arange(N_spatial)
-    dxs = xs - centerx
-    dys = ys - centery
-    θs = np.arctan2(dys[None, :], dxs[:, None])
-    return θs
+    dxs = (xs - centerx)[:, None]
+    dys = (ys - centery)[None, :]
 
-def radial_grid(N_spatial):
-    """Compute a grid of radial coordinates."""
-    centerx = N_spatial // 2
-    centery = centerx
-    xs = np.arange(N_spatial)
-    ys = np.arange(N_spatial)
-    dxs = xs - centerx
-    dys = ys - centery
-    rs = 2 * np.sqrt(dxs[:, None]**2 + dys[None, :]**2) / N_spatial #  + np.finfo(np.float64).eps)
-    return rs
+    rs = 2 * np.sqrt(dxs**2 + dys**2) / N_spatial
+    θs = np.arctan2(dys, dxs)
+    return rs, θs
 
-def radial_window(N_spatial, n, inflection_point):
+def radial_window(rs, n, inflection_point):
     """
     Compute a smooth radial window in the Fourier domain for limiting the
     bandwidth of the cakewavelets.
@@ -65,7 +56,7 @@ def radial_window(N_spatial, n, inflection_point):
     "Perceptual Organization in Image Analysis" (2005).
     """
     ε = np.finfo(np.float64).eps
-    ρ_matrix = ε + radial_grid(N_spatial) / np.sqrt(2 * inflection_point**2 / (1 + 2 * n))
+    ρ_matrix = ε + rs / np.sqrt(2 * inflection_point**2 / (1 + 2 * n))
     s = np.zeros_like(ρ_matrix)
     exp_ρ_squared = np.exp(-ρ_matrix**2)
     for k in range(n + 1):
@@ -164,14 +155,14 @@ def cakewavelet_stack_fourier(N_spatial, dθ, spline_order, overlap_factor, infl
           DC component, such that the cakewavelets can be constructed around
           the origin in the Fourier domain.
     """
-    mn_window = radial_window(N_spatial, mn_order, inflection_point)
+    rs_grid, θs_grid = polar_grids(N_spatial)
+    mn_window = radial_window(rs_grid, mn_order, inflection_point)
     window =  mn_window
-    angle_grid = angular_grid(N_spatial)
     dθ_overlapped = dθ / overlap_factor
     s = 2 * np.pi
     θs = np.arange(0, s, dθ_overlapped)
 
-    xs = mod_offset(angle_grid[None, ...] - θs[..., None, None] - np.pi / 2, 2 * np.pi, -np.pi) / dθ
+    xs = mod_offset(θs_grid[None, ...] - θs[..., None, None] - np.pi / 2, 2 * np.pi, -np.pi) / dθ
     filters = window[None, ...] * B_spline(spline_order, xs)
     return filters
 

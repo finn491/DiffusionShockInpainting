@@ -39,7 +39,7 @@ from dsfilter.SE2.LI.derivatives import (
     morphological_s,
     TV
 )
-from dsfilter.SE2.regularisers import gaussian_derivative_kernel
+from dsfilter.SE2.regularisers import gaussian_kernel
 from dsfilter.SE2.utils import project_down
 from dsfilter.utils import (
     compute_PSNR,
@@ -102,12 +102,12 @@ def DS_inpainting(u0_np, mask_np, θs_np, ξ, T, G_D_inv_np, G_S_inv_np, σ, ρ,
     dt = compute_timestep(dxy, dθ, G_D_inv_np, G_S_inv_np)
     n = int(T / dt)
 
-    k_s_DS, radius_s_DS = gaussian_derivative_kernel(ν, 0, dxy=dxy)
-    k_o_DS, radius_o_DS = gaussian_derivative_kernel(ν * ξ, 0, dxy=dθ)
-    k_s_morph_int, radius_s_morph_int = gaussian_derivative_kernel(σ, 0, dxy=dxy)
-    k_o_morph_int, radius_o_morph_int = gaussian_derivative_kernel(σ * ξ, 0, dxy=dθ)
-    k_s_morph_ext, radius_s_morph_ext = gaussian_derivative_kernel(ρ, 0, dxy=dxy)
-    k_o_morph_ext, radius_o_morph_ext = gaussian_derivative_kernel(ρ * ξ, 0, dxy=dθ)
+    k_s_DS, radius_s_DS = gaussian_kernel(ν, dxy=dxy)
+    k_o_DS, radius_o_DS = gaussian_kernel(ν * ξ, dxy=dθ)
+    k_s_morph_int, radius_s_morph_int = gaussian_kernel(σ, dxy=dxy)
+    k_o_morph_int, radius_o_morph_int = gaussian_kernel(σ * ξ, dxy=dθ)
+    k_s_morph_ext, radius_s_morph_ext = gaussian_kernel(ρ, dxy=dxy)
+    k_o_morph_ext, radius_o_morph_ext = gaussian_kernel(ρ * ξ, dxy=dθ)
 
     # Initialise TaiChi objects
     θs = ti.field(dtype=ti.f32, shape=shape)
@@ -208,12 +208,12 @@ def DS_enhancing(u0_np, ground_truth_np, θs_np, ξ, T, G_D_inv_np, G_S_inv_np, 
     dt = compute_timestep(dxy, dθ, G_D_inv_np, G_S_inv_np)
     n = int(T / dt)
 
-    k_s_DS, radius_s_DS = gaussian_derivative_kernel(ν, 0, dxy=dxy)
-    k_o_DS, radius_o_DS = gaussian_derivative_kernel(ν * ξ, 0, dxy=dθ)
-    k_s_morph_int, radius_s_morph_int = gaussian_derivative_kernel(σ, 0, dxy=dxy)
-    k_o_morph_int, radius_o_morph_int = gaussian_derivative_kernel(σ * ξ, 0, dxy=dθ)
-    k_s_morph_ext, radius_s_morph_ext = gaussian_derivative_kernel(ρ, 0, dxy=dxy)
-    k_o_morph_ext, radius_o_morph_ext = gaussian_derivative_kernel(ρ * ξ, 0, dxy=dθ)
+    k_s_DS, radius_s_DS = gaussian_kernel(ν, dxy=dxy)
+    k_o_DS, radius_o_DS = gaussian_kernel(ν * ξ, dxy=dθ)
+    k_s_morph_int, radius_s_morph_int = gaussian_kernel(σ, dxy=dxy)
+    k_o_morph_int, radius_o_morph_int = gaussian_kernel(σ * ξ, dxy=dθ)
+    k_s_morph_ext, radius_s_morph_ext = gaussian_kernel(ρ, dxy=dxy)
+    k_o_morph_ext, radius_o_morph_ext = gaussian_kernel(ρ * ξ, dxy=dθ)
 
     # Initialise TaiChi objects
     θs = ti.field(dtype=ti.f32, shape=shape)
@@ -345,12 +345,12 @@ def DS_inpainting_spatial(u0_np, mask_np, θs_np, T, G_D_inv_np, G_S_inv_np, σ_
     dt = compute_timestep(dxy, dθ, G_D_inv_np, G_S_inv_np)
     n = int(T / dt)
 
-    k_s_DS, radius_s_DS = gaussian_derivative_kernel(ν_s, 0, dxy=dxy)
-    k_o_DS, radius_o_DS = gaussian_derivative_kernel(ν_o, 0, dxy=dθ)
-    k_s_morph_int, radius_s_morph_int = gaussian_derivative_kernel(σ_s, 0, dxy=dxy)
-    k_o_morph_int, radius_o_morph_int = gaussian_derivative_kernel(σ_o, 0, dxy=dθ)
-    k_s_morph_ext, radius_s_morph_ext = gaussian_derivative_kernel(ρ_s, 0, dxy=dxy)
-    k_o_morph_ext, radius_o_morph_ext = gaussian_derivative_kernel(ρ_o, 0, dxy=dθ)
+    k_s_DS, radius_s_DS = gaussian_kernel(ν_s, dxy=dxy)
+    k_o_DS, radius_o_DS = gaussian_kernel(ν_o, dxy=dθ)
+    k_s_morph_int, radius_s_morph_int = gaussian_kernel(σ_s, dxy=dxy)
+    k_o_morph_int, radius_o_morph_int = gaussian_kernel(σ_o, dxy=dθ)
+    k_s_morph_ext, radius_s_morph_ext = gaussian_kernel(ρ_s, dxy=dxy)
+    k_o_morph_ext, radius_o_morph_ext = gaussian_kernel(ρ_o, dxy=dθ)
 
     # Initialise TaiChi objects
     θs = ti.field(dtype=ti.f32, shape=shape)
@@ -613,10 +613,10 @@ def shock_inpainting(u0_np, mask_np, G_inv_np, dxy, dθ, θs_np, σ_s, σ_o, ρ_
     """
     dt = compute_timestep_shock(dxy, dθ, G_inv_np)
     n = int(T / dt)
-    k_s_int, radius_s_int = gaussian_derivative_kernel(σ_s, 0)
-    k_o_int, radius_o_int = gaussian_derivative_kernel(σ_o, 0)
-    k_s_ext, radius_s_ext = gaussian_derivative_kernel(ρ_s, 0)
-    k_o_ext, radius_o_ext = gaussian_derivative_kernel(ρ_o, 0)
+    k_s_int, radius_s_int = gaussian_kernel(σ_s)
+    k_o_int, radius_o_int = gaussian_kernel(σ_o)
+    k_s_ext, radius_s_ext = gaussian_kernel(ρ_s)
+    k_o_ext, radius_o_ext = gaussian_kernel(ρ_o)
     shape = u0_np.shape
     u = ti.field(dtype=ti.f32, shape=shape)
     u.from_numpy(u0_np)
@@ -710,8 +710,8 @@ def TV_enhancing(u0_np_unscaled, ground_truth_np, G_inv_np, dxy, dθ, θs_np, σ
         dt = compute_timestep_TV(dxy, dθ, G_inv_np)
     print(dt)
     n = int(T / dt)
-    k_s, radius_s = gaussian_derivative_kernel(σ_s, 0)
-    k_o, radius_o = gaussian_derivative_kernel(σ_o, 0)
+    k_s, radius_s = gaussian_kernel(σ_s)
+    k_o, radius_o = gaussian_kernel(σ_o)
     u0_np = u0_np_unscaled * λ
     shape = u0_np.shape
     u = ti.field(dtype=ti.f32, shape=shape)
