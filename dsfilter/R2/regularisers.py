@@ -106,7 +106,7 @@ def gaussian_kernel(σ, truncate=5., dxy=1.):
     """
     radius = int(σ * truncate + 0.5)
     k = ti.field(dtype=ti.f32, shape=2*radius+1)
-    gaussian_kernel_ti(σ, radius, dxy, k)
+    gaussian_kernel_ti(σ, radius, k)
     return k, radius
 
 @ti.kernel
