@@ -55,7 +55,7 @@ def project_down(
         u[I] = 0.
         for i in range(Nθ):
             u[I] += U[I, i] / scale
-        ti.math.clamp(u[I], clip_l, clip_r)
+        u[I] = ti.math.clamp(u[I], clip_l, clip_r)
 
 # Safe Indexing
 
