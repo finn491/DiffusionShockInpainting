@@ -198,7 +198,7 @@ def cakewavelet_stack(N_spatial, Nθ, inflection_point=0.8, mn_order=8, spline_o
 
     cake_fourier[:, (N_spatial//2 - 5):(N_spatial//2 + 6), (N_spatial//2 - 5):(N_spatial//2 + 6)] = dθ / (2 * np.pi)
 
-    cake = np.zeros_like(cake_fourier, dtype=np.complex_)
+    cake = np.zeros_like(cake_fourier, dtype=np.complex128)
     rotation_amount = np.array((N_spatial // 2, N_spatial // 2))
     window = Gauss_window(N_spatial, Gaussian_σ)
     for i, slice_fourier in enumerate(cake_fourier):
@@ -226,7 +226,7 @@ def wavelet_transform(f, kernels):
     """Return the wavelet transform of image `f` under the `kernels`."""
     shape = f.shape
     kernels_shape = kernels.shape
-    ost = np.zeros((kernels_shape[0], *shape), dtype=np.complex_)
+    ost = np.zeros((kernels_shape[0], *shape), dtype=np.complex128)
     if kernels_shape[1:] != shape: # Pad kernels so we can convolve by multiplication in Fourier domain.
         if kernels_shape[1] % 2 == 0:
             pad_1_l = int(np.floor((shape[0] - kernels_shape[1]) / 2))
